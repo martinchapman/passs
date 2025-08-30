@@ -7,7 +7,7 @@ add_tag() {
     [ ! -f "$file" ] && printf '{"tags":[]}\n' > "$file"
     jq -e --arg t "$2" '.tags | index($t)' "$file" >/dev/null 2>&1 || {
         jq --arg t "$2" '.tags += [$t]' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-        echo "Added tag '$2' to $file"
+        git -C "$HOME/.password-store" add "$file" && git -C "$HOME/.password-store" commit -m "Add tag '$2' for $1"
         return
     }
     echo "Tag '$2' already exists in $file"
