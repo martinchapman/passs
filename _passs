@@ -1,0 +1,7 @@
+#compdef passs
+_passs() {
+  if [[ $words[2] == "tag" ]]; then
+    _files -W ~/.password-store -g "*.gpg(:r)"
+  fi
+}
+_passs "$@"
