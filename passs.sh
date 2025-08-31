@@ -17,9 +17,17 @@ list_by_tag() {
         jq -r --arg t "$1" 'select(.tags[]? == $t) | "match"' "$file" | grep -q . && echo "${file%/.site.meta.json}" | sed "s|$HOME/.password-store/||"
     done
 }
+lint() {
+    find "$HOME/.password-store" -type d | while read -r dir; do
+        basename="$(basename "$dir")"
+        [ "$basename" = ".password-store" ] && continue
+        echo "$basename" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.' && echo "$basename" | grep -qvE '^[0-9.]+$' && echo "error: folder name '$basename' appears to contain subdomain at $(echo "$dir" | sed "s|$HOME/.password-store/||")"
+    done
+}
 case "$1" in
     tag) [ $# -lt 3 ] && { echo "Usage: passs tag pass-name <tag>"; exit 1; }; add_tag "$2" "$3";;
     get) [ $# -lt 2 ] && { echo "Usage: passs get <tag>"; exit 1; }; list_by_tag "$2";;
+    lint) lint;;
     --version|version) echo "pass wrapper v$VERSION";;
     *) pass "$@";;
 esac
