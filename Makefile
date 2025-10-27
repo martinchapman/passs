@@ -1,0 +1,2 @@
+prettier:
+	shfmt -w *.sh
