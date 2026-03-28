@@ -21,7 +21,8 @@ lint() {
 	find "$HOME/.password-store" -type d | while read -r dir; do
 		basename="$(basename "$dir")"
 		[ "$basename" = ".password-store" ] && continue
-		echo "$basename" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.' && echo "$basename" | grep -qvE '^[0-9.]+$' && echo "error: folder name '$basename' appears to contain subdomain at $(echo "$dir" | sed "s|$HOME/.password-store/||")"
+		relative_path="$(echo "$dir" | sed "s|$HOME/.password-store/||")"
+		echo "$relative_path" | grep -qv '/' && echo "$basename" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.' && echo "$basename" | grep -qvE '^[0-9.]+$' && echo "error: folder name '$basename' appears to contain subdomain at $relative_path"
 	done
 }
 case "$1" in
