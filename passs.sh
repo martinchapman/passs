@@ -45,11 +45,22 @@ lint() {
 }
 case "$1" in
 tag)
-	[ $# -lt 3 ] && {
-		echo "Usage: passs tag pass-name <tag>"
-		exit 1
-	}
-	add_tag "$2" "$3"
+	case "$2" in
+	list)
+		[ $# -lt 3 ] && {
+			echo "Usage: passs tag list <tag>"
+			exit 1
+		}
+		list_by_tag "$3"
+		;;
+	*)
+		[ $# -lt 3 ] && {
+			echo "Usage: passs tag pass-name <tag>"
+			exit 1
+		}
+		add_tag "$2" "$3"
+		;;
+	esac
 	;;
 description)
 	[ $# -lt 3 ] && {
@@ -57,13 +68,6 @@ description)
 		exit 1
 	}
 	add_description "$2" "$3"
-	;;
-get)
-	[ $# -lt 2 ] && {
-		echo "Usage: passs get <tag>"
-		exit 1
-	}
-	list_by_tag "$2"
 	;;
 lint) lint ;;
 --version | version) echo "pass wrapper v$VERSION" ;;
