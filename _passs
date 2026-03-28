@@ -1,6 +1,7 @@
 #compdef passs
 _passs() {
-  if [[ $words[2] == "tag" || $words[2] == "description" ]]; then
+  if [[ ($words[2] == "tag" && $words[3] != "list") ||
+        ($words[2] == "description" && ($words[3] != "get" || $CURRENT -eq 4)) ]]; then
     _files -W ~/.password-store -g "*.gpg(:r)"
   fi
 }

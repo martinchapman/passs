@@ -30,6 +30,13 @@ add_description() {
 	[ -n "$current_description" ] && verb="Update" || verb="Add"
 	commit_meta_change "$file" "$verb description for $1"
 }
+get_description() {
+	file="$(meta_file "$1")"
+	[ -f "$file" ] && {
+		description="$(jq -r '.description // ""' "$file")"
+		[ -n "$description" ] && echo "$description"
+	}
+}
 list_by_tag() {
 	find "$HOME/.password-store" -name ".site.meta.json" | while read -r file; do
 		jq -r --arg t "$1" 'select(.tags[]? == $t) | "match"' "$file" | grep -q . && echo "${file%/.site.meta.json}" | sed "s|$HOME/.password-store/||"
@@ -63,11 +70,22 @@ tag)
 	esac
 	;;
 description)
-	[ $# -lt 3 ] && {
-		echo "Usage: passs description pass-name <description>"
-		exit 1
-	}
-	add_description "$2" "$3"
+	case "$2" in
+	get)
+		[ $# -lt 3 ] && {
+			echo "Usage: passs description get pass-name"
+			exit 1
+		}
+		get_description "$3"
+		;;
+	*)
+		[ $# -lt 3 ] && {
+			echo "Usage: passs description pass-name <description>"
+			exit 1
+		}
+		add_description "$2" "$3"
+		;;
+	esac
 	;;
 lint) lint ;;
 --version | version) echo "pass wrapper v$VERSION" ;;
