@@ -1,16 +1,34 @@
 #!/usr/bin/env sh
 VERSION="0.1.0"
 meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
-add_tag() {
+ensure_meta_file() {
 	file="$(meta_file "$1")"
 	mkdir -p "$(dirname "$file")"
-	[ ! -f "$file" ] && printf '{"tags":[]}\n' >"$file"
+	[ ! -f "$file" ] && printf '{"tags":[],"description":""}\n' >"$file"
+	echo "$file"
+}
+commit_meta_change() {
+	git -C "$HOME/.password-store" add "$1" && git -C "$HOME/.password-store" commit -m "$2"
+}
+add_tag() {
+	file="$(ensure_meta_file "$1")"
 	jq -e --arg t "$2" '.tags | index($t)' "$file" >/dev/null 2>&1 || {
 		jq --arg t "$2" '.tags += [$t]' "$file" >"${file}.tmp" && mv "${file}.tmp" "$file"
-		git -C "$HOME/.password-store" add "$file" && git -C "$HOME/.password-store" commit -m "Add tag '$2' for $1"
+		commit_meta_change "$file" "Add tag '$2' for $1"
 		return
 	}
 	echo "Tag '$2' already exists in $file"
+}
+add_description() {
+	file="$(ensure_meta_file "$1")"
+	current_description="$(jq -r '.description // ""' "$file")"
+	[ "$current_description" = "$2" ] && {
+		echo "Description already set to '$2' for $1"
+		return
+	}
+	jq --arg d "$2" '.description = $d' "$file" >"${file}.tmp" && mv "${file}.tmp" "$file"
+	[ -n "$current_description" ] && verb="Update" || verb="Add"
+	commit_meta_change "$file" "$verb description for $1"
 }
 list_by_tag() {
 	find "$HOME/.password-store" -name ".site.meta.json" | while read -r file; do
@@ -32,6 +50,13 @@ tag)
 		exit 1
 	}
 	add_tag "$2" "$3"
+	;;
+description)
+	[ $# -lt 3 ] && {
+		echo "Usage: passs description pass-name <description>"
+		exit 1
+	}
+	add_description "$2" "$3"
 	;;
 get)
 	[ $# -lt 2 ] && {
