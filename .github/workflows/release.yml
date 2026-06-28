@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Bump, changelog, and tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: git-cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --bump --output CHANGELOG.md
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          OUTPUT: CHANGELOG.md
+
+      - name: Determine next version
+        id: version
+        shell: sh
+        run: |
+          raw_version="${{ steps.git-cliff.outputs.version }}"
+          version="${raw_version#v}"
+          tag="v$version"
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "No release needed; $tag already exists."
+            echo "release=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release=true" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+      - name: Update script version
+        if: steps.version.outputs.release == 'true'
+        shell: sh
+        run: |
+          sed -i "s/^VERSION=.*/VERSION=\"${{ steps.version.outputs.version }}\"/" passs.sh
+
+      - name: Commit changelog and tag release
+        if: steps.version.outputs.release == 'true'
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: CHANGELOG.md passs.sh
+          author_name: github-actions[bot]
+          author_email: 41898282+github-actions[bot]@users.noreply.github.com
+          committer_name: github-actions[bot]
+          committer_email: 41898282+github-actions[bot]@users.noreply.github.com
+          message: "chore: ${{ steps.version.outputs.tag }} [skip ci]"
+          tag: ${{ steps.version.outputs.tag }}

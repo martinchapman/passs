@@ -1,0 +1,7 @@
+[bump]
+breaking_always_bump_major = false
+features_always_bump_minor = false
+initial_tag = "0.1.0"
+
+[git]
+require_conventional = true
