@@ -50,44 +50,48 @@ lint() {
 		echo "$relative_path" | grep -qv '/' && echo "$basename" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.' && echo "$basename" | grep -qvE '^[0-9.]+$' && echo "error: folder name '$basename' appears to contain subdomain at $relative_path"
 	done
 }
-case "$1" in
-tag)
-	case "$2" in
-	list)
-		[ $# -lt 3 ] && {
-			echo "Usage: passs tag list <tag>"
-			exit 1
-		}
-		list_by_tag "$3"
+passs_main() {
+	case "$1" in
+	tag)
+		case "$2" in
+		list)
+			[ $# -lt 3 ] && {
+				echo "Usage: passs tag list <tag>"
+				exit 1
+			}
+			list_by_tag "$3"
+			;;
+		*)
+			[ $# -lt 3 ] && {
+				echo "Usage: passs tag pass-name <tag>"
+				exit 1
+			}
+			add_tag "$2" "$3"
+			;;
+		esac
 		;;
-	*)
-		[ $# -lt 3 ] && {
-			echo "Usage: passs tag pass-name <tag>"
-			exit 1
-		}
-		add_tag "$2" "$3"
+	description)
+		case "$2" in
+		get)
+			[ $# -lt 3 ] && {
+				echo "Usage: passs description get pass-name"
+				exit 1
+			}
+			get_description "$3"
+			;;
+		*)
+			[ $# -lt 3 ] && {
+				echo "Usage: passs description pass-name <description>"
+				exit 1
+			}
+			add_description "$2" "$3"
+			;;
+		esac
 		;;
+	lint) lint ;;
+	--version | version) echo "pass wrapper v$VERSION" ;;
+	*) pass "$@" ;;
 	esac
-	;;
-description)
-	case "$2" in
-	get)
-		[ $# -lt 3 ] && {
-			echo "Usage: passs description get pass-name"
-			exit 1
-		}
-		get_description "$3"
-		;;
-	*)
-		[ $# -lt 3 ] && {
-			echo "Usage: passs description pass-name <description>"
-			exit 1
-		}
-		add_description "$2" "$3"
-		;;
-	esac
-	;;
-lint) lint ;;
---version | version) echo "pass wrapper v$VERSION" ;;
-*) pass "$@" ;;
-esac
+}
+
+[ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
