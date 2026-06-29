@@ -18,13 +18,17 @@ die() {
 	exit 1
 }
 
+has_command() {
+	command -v "$1" >/dev/null 2>&1
+}
+
 download() {
 	url="$1"
 	destination="$2"
 
-	if command -v curl >/dev/null 2>&1; then
+	if has_command curl; then
 		curl -fsSL "$url" -o "$destination"
-	elif command -v wget >/dev/null 2>&1; then
+	elif has_command wget; then
 		wget -q "$url" -O "$destination"
 	else
 		die "install requires curl or wget"
@@ -72,7 +76,7 @@ uses_zsh() {
 }
 
 zsh_fpath_contains() {
-	command -v zsh >/dev/null 2>&1 || return 1
+	has_command zsh || return 1
 	zsh -ic 'dir="$1"; for entry in $fpath; do [[ "$entry" == "$dir" ]] && exit 0; done; exit 1' passs-check "$1" >/dev/null 2>&1
 }
 
