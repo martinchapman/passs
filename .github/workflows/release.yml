@@ -30,7 +30,6 @@ jobs:
           config: cliff.toml
           args: --bump --output CHANGELOG.md
         env:
-          GITHUB_REPO: ${{ github.repository }}
           OUTPUT: CHANGELOG.md
 
       - name: Determine next version
