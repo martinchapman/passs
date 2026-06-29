@@ -66,19 +66,32 @@ list_by_tag() {
 }
 
 password_store_dirs() { find "$(password_store_dir)" -type d; }
+top_level_gpg_files() { find "$(password_store_dir)" -maxdepth 1 -name "*.gpg" -type f; }
 path_basename() { basename "$1"; }
 path_relative_to_store() { echo "$1" | sed "s|$(password_store_dir)/||"; }
 is_top_level_path() { echo "$1" | grep -qv '/'; }
 looks_like_subdomain() { echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.'; }
 looks_like_ip_address() { echo "$1" | grep -qE '^[0-9.]+$'; }
 
+lint_subdomain_folder_name() {
+	is_top_level_path "$2" && looks_like_subdomain "$1" && ! looks_like_ip_address "$1" && echo "error: folder name '$1' appears to contain subdomain at $2"
+}
+
+lint_gpg_at_top_level() {
+	top_level_gpg_files | while read -r file; do
+		basename="$(path_basename "$file")"
+		echo "error: file '$basename' is a .gpg file at the top level"
+	done
+}
+
 lint() {
 	password_store_dirs | while read -r dir; do
 		basename="$(path_basename "$dir")"
 		[ "$basename" = ".password-store" ] && continue
 		relative_path="$(path_relative_to_store "$dir")"
-		is_top_level_path "$relative_path" && looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && echo "error: folder name '$basename' appears to contain subdomain at $relative_path"
+		lint_subdomain_folder_name "$basename" "$relative_path"
 	done
+	lint_gpg_at_top_level
 }
 
 passs_main() {
