@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -56,14 +57,30 @@ jobs:
         run: |
           sed -i "s/^VERSION=.*/VERSION=\"${{ steps.version.outputs.version }}\"/" passs.sh
 
-      - name: Commit changelog and tag release
+      - name: Create release PR
+        id: pr
         if: steps.version.outputs.release == 'true'
-        uses: EndBug/add-and-commit@v9
+        uses: peter-evans/create-pull-request@v8
         with:
-          add: CHANGELOG.md passs.sh
-          author_name: github-actions[bot]
-          author_email: 41898282+github-actions[bot]@users.noreply.github.com
-          committer_name: github-actions[bot]
-          committer_email: 41898282+github-actions[bot]@users.noreply.github.com
-          message: "chore: ${{ steps.version.outputs.tag }} [skip ci]"
-          tag: ${{ steps.version.outputs.tag }}
+          commit-message: "chore: ${{ steps.version.outputs.tag }}"
+          branch: "release/${{ steps.version.outputs.tag }}"
+          title: "chore: ${{ steps.version.outputs.tag }}"
+          body: ""
+          delete-branch: true
+
+      - name: Merge release PR
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: sh
+        run: gh pr merge ${{ steps.pr.outputs.pull-request-number }} --squash --delete-branch
+
+      - name: Tag release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: sh
+        run: |
+          git fetch origin main
+          git tag "${{ steps.version.outputs.tag }}" origin/main
+          git push origin "${{ steps.version.outputs.tag }}"
