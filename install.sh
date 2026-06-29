@@ -31,6 +31,26 @@ download() {
 	fi
 }
 
+make_temp_dir() {
+	mktemp -d
+}
+
+remove_dir() {
+	rm -rf "$1"
+}
+
+make_dir() {
+	mkdir -p "$@"
+}
+
+set_file_mode() {
+	chmod "$1" "$2"
+}
+
+move_file() {
+	mv "$1" "$2"
+}
+
 path_contains() {
 	case ":$PATH:" in
 	*":$1:"*) return 0 ;;
@@ -57,19 +77,19 @@ zsh_fpath_contains() {
 }
 
 install_main() {
-	tmp_dir="$(mktemp -d)"
-	trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
+	tmp_dir="$(make_temp_dir)"
+	trap 'remove_dir "$tmp_dir"' EXIT HUP INT TERM
 
-	mkdir -p "$BIN_DIR" "$ZSH_COMPLETION_DIR"
+	make_dir "$BIN_DIR" "$ZSH_COMPLETION_DIR"
 
 	download "$REPO_URL/passs.sh" "$tmp_dir/passs"
 	download "$REPO_URL/_passs" "$tmp_dir/_passs"
 
-	chmod 755 "$tmp_dir/passs"
-	chmod 644 "$tmp_dir/_passs"
+	set_file_mode 755 "$tmp_dir/passs"
+	set_file_mode 644 "$tmp_dir/_passs"
 
-	mv "$tmp_dir/passs" "$BIN_DIR/passs"
-	mv "$tmp_dir/_passs" "$ZSH_COMPLETION_DIR/_passs"
+	move_file "$tmp_dir/passs" "$BIN_DIR/passs"
+	move_file "$tmp_dir/_passs" "$ZSH_COMPLETION_DIR/_passs"
 
 	info "Installed passs to $BIN_DIR/passs"
 	info "Installed zsh completion to $ZSH_COMPLETION_DIR/_passs"
