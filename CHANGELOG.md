@@ -1,8 +1,14 @@
+## [0.1.3] - 2026-06-29
+
+### 🚀 Features
+
+- *(lint)* No top-level gpg (#20)
 ## [0.1.2] - 2026-06-29
 
 ### ⚙️ Miscellaneous Tasks
 
 - Add license (#18)
+- V0.1.2 (#19)
 ## [0.1.1] - 2026-06-29
 
 ### 🧪 Testing
