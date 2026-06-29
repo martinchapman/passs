@@ -1,3 +1,8 @@
+## [0.1.2] - 2026-06-29
+
+### ⚙️ Miscellaneous Tasks
+
+- Add license (#18)
 ## [0.1.1] - 2026-06-29
 
 ### 🧪 Testing
@@ -8,6 +13,7 @@
 
 - Remove git cliff gh integration (#15)
 - Open pr for changelog (#16)
+- V0.1.1 (#17)
 ## [0.1.0] - 2026-06-28
 
 ### 🚀 Features
