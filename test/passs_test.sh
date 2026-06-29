@@ -248,15 +248,34 @@ test_lint_subdomain_folder_found_reports_error() {
 			"$HOME/.password-store/192.168.0.1" \
 			"$HOME/.password-store/bar.com/baz"
 	}
+	top_level_gpg_files() { return 0; }
 	register_stub password_store_dirs
+	register_stub top_level_gpg_files
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com"
 }
 
 test_lint_no_violations_found_produces_no_output() {
 	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
+	top_level_gpg_files() { return 0; }
 	register_stub password_store_dirs
+	register_stub top_level_gpg_files
 	run_with_output lint
+	assert_success
+	assert_output ""
+}
+
+test_lint_gpg_at_top_level_gpg_file_found_reports_error() {
+	top_level_gpg_files() { printf '%s\n' "$HOME/.password-store/foo.gpg"; }
+	register_stub top_level_gpg_files
+	run_with_output lint_gpg_at_top_level
+	assert_output "error: file 'foo.gpg' is a .gpg file at the top level"
+}
+
+test_lint_gpg_at_top_level_no_gpg_files_produces_no_output() {
+	top_level_gpg_files() { return 0; }
+	register_stub top_level_gpg_files
+	run_with_output lint_gpg_at_top_level
 	assert_success
 	assert_output ""
 }
