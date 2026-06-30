@@ -180,7 +180,10 @@ passs_main() {
 		;;
 	lint)
 		case "$2" in
-		--fix) lint_fix ;;
+		--fix)
+			lint
+			lint_fix
+			;;
 		*) lint ;;
 		esac
 		;;

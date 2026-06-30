@@ -502,14 +502,33 @@ test_passs_main_lint_command_routes_to_lint() {
 	assert_output "lint"
 }
 
-test_passs_main_lint_fix_flag_routes_to_lint_fix() {
+test_passs_main_lint_fix_flag_routes_to_lint_then_lint_fix() {
+	lint() {
+		printf 'lint\n'
+	}
 	lint_fix() {
 		printf 'lint_fix\n'
 	}
+	register_stub lint
 	register_stub lint_fix
 	run_with_output passs_main lint --fix
 	assert_success
-	assert_output "lint_fix"
+	assert_output "lint
+lint_fix"
+}
+
+test_passs_main_lint_fix_flag_reports_lint_when_nothing_is_fixed() {
+	lint() {
+		printf 'lint errors\n'
+	}
+	lint_fix() {
+		return 0
+	}
+	register_stub lint
+	register_stub lint_fix
+	run_with_output passs_main lint --fix
+	assert_success
+	assert_output "lint errors"
 }
 
 test_passs_main_lint_fix_word_routes_to_lint() {
