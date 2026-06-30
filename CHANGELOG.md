@@ -1,8 +1,17 @@
+## [0.1.6] - 2026-06-30
+
+### 🚀 Features
+
+- *(lint)* Add top-level gpg fix (#26)
 ## [0.1.5] - 2026-06-30
 
 ### 🚜 Refactor
 
 - *(lint)* Add expected rule structure (#24)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.5 (#25)
 ## [0.1.4] - 2026-06-30
 
 ### ⚙️ Miscellaneous Tasks
