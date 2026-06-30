@@ -341,6 +341,35 @@ test_lint_rule_report_reports_rule_advice() {
 	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
 
+test_passs_script_lint_defines_rules_before_running_main() {
+	run_passs_lint_from_source() {
+		find() {
+			case " $* " in
+			*" -type d "*) printf '%s\n' "$HOME/.password-store" "$HOME/.password-store/foo.bar.com" ;;
+			*" -maxdepth 1 "*) return 0 ;;
+			*) return 1 ;;
+			esac
+		}
+
+		for rule in $(lint_rules); do
+			unset -f "lint_${rule}_violations"
+			unset -f "lint_${rule}_message"
+			unset -f "lint_${rule}_remediation"
+			unset -f "lint_${rule}_fix"
+		done
+
+		set -- lint
+		PASSS_TESTING=0 . ./passs.sh
+	}
+	register_stub run_passs_lint_from_source
+
+	run_with_output run_passs_lint_from_source
+	assert_success
+	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+}
+
 test_passs_main_version_flag_prints_version() {
 	run_with_output passs_main version
 	assert_success

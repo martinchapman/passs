@@ -163,8 +163,6 @@ passs_main() {
 	esac
 }
 
-[ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
-
 ###############################################################################
 # Lint rule: gpg_at_top_level
 ###############################################################################
@@ -208,3 +206,5 @@ lint_subdomain_folder_name_message() {
 lint_subdomain_folder_name_remediation() {
 	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
+
+[ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
