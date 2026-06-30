@@ -249,6 +249,34 @@ lint_subdomain_folder_name_message() {
 lint_subdomain_folder_name_remediation() {
 	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
+
+subdomain_to_nested_path() {
+	tld="${1##*.}"
+	without_tld="${1%.*}"
+	registrable="${without_tld##*.}.$tld"
+	subdomain_labels="${without_tld%.*}"
+	nested="$registrable"
+	while [ -n "$subdomain_labels" ]; do
+		label="${subdomain_labels##*.}"
+		nested="$nested/$label"
+		[ "$subdomain_labels" = "$label" ] && break
+		subdomain_labels="${subdomain_labels%.*}"
+	done
+	echo "$nested"
+}
+
+lint_subdomain_folder_name_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	store_dir="$(password_store_dir)"
+	target_relative="$(subdomain_to_nested_path "$name")"
+	target="$store_dir/$target_relative"
+	path_exists "$target" && {
+		echo "error: cannot fix '$name', '$target_relative' already exists"
+		return
+	}
+	make_dir "$(parent_dir "$target")" &&
+		move_file "$store_dir/$name" "$target" &&
+		echo "fixed: moved '$name' to '$target_relative'"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"

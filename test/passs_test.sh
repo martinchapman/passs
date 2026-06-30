@@ -373,7 +373,7 @@ Top-level folders should be registrable domains. Put subdomains underneath the p
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
-	run_with_output lint_rule_fix subdomain_folder_name "$(printf 'foo.bar.com\tfoo.bar.com')"
+	run_with_output lint_rule_fix missing "$(printf 'foo\tfoo')"
 	assert_success
 	assert_output ""
 }
@@ -423,6 +423,66 @@ test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
+	assert_calls ""
+}
+
+test_subdomain_to_nested_path_three_labels_nests_under_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.com"
+	assert_success
+	assert_output "bar.com/foo"
+}
+
+test_subdomain_to_nested_path_four_labels_nests_each_label_in_reverse() {
+	run_with_output subdomain_to_nested_path "foo.bar.baz.com"
+	assert_success
+	assert_output "baz.com/bar/foo"
+}
+
+test_lint_subdomain_folder_name_fix_target_absent_moves_into_nested_path() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() {
+		append_call "make_dir $1"
+		return 0
+	}
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/baz.com/bar" \
+		"move_file $TEST_ROOT/store/foo.bar.baz.com $TEST_ROOT/store/baz.com/bar/foo")"
+}
+
+test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { return 0; }
+	move_file() { return 0; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
+	assert_success
+	assert_output "fixed: moved 'foo.bar.baz.com' to 'baz.com/bar/foo'"
+}
+
+test_lint_subdomain_folder_name_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tfoo.bar.com')"
+	assert_success
+	assert_output "error: cannot fix 'foo.bar.com', 'bar.com/foo' already exists"
 	assert_calls ""
 }
 
