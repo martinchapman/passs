@@ -376,6 +376,40 @@ test_lint_rule_fix_without_fix_function_returns_success() {
 	assert_output ""
 }
 
+test_lint_gpg_at_top_level_fix_target_absent_moves_into_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() {
+		append_call "make_dir $1"
+		return 0
+	}
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/foo" \
+		"move_file $TEST_ROOT/store/foo.gpg $TEST_ROOT/store/foo/password.gpg")"
+}
+
+test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
+	assert_success
+	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
+	assert_calls ""
+}
+
 test_lint_fix_routes_violations_to_fix_function() {
 	lint_rules() { printf '%s\n' foo; }
 	lint_foo_violations() {

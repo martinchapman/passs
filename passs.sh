@@ -5,6 +5,8 @@ password_store_dir() { echo "$HOME/.password-store"; }
 meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
 parent_dir() { dirname "$1"; }
 make_dir() { mkdir -p "$1"; }
+move_file() { mv "$1" "$2"; }
+path_exists() { [ -e "$1" ]; }
 meta_file_exists() { [ -f "$1" ]; }
 write_default_meta_file() { printf '{"tags":[],"description":""}\n' >"$1"; }
 
@@ -200,6 +202,17 @@ lint_gpg_at_top_level_message() {
 lint_gpg_at_top_level_remediation() {
 	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
+
+lint_gpg_at_top_level_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	folder="${name%.gpg}"
+	store_dir="$(password_store_dir)"
+	target="$store_dir/$folder/password.gpg"
+	path_exists "$target" && {
+		echo "error: cannot fix '$name', '$folder/password.gpg' already exists"
+		return
+	}
+	make_dir "$store_dir/$folder" && move_file "$store_dir/$name" "$target"
 }
 
 ###############################################################################
