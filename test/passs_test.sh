@@ -257,7 +257,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -281,7 +281,7 @@ test_lint_subdomain_folder_message_formats_record() {
 test_lint_subdomain_folder_remediation_reports_overall_advice() {
 	run_with_output lint_subdomain_folder_name_remediation
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_no_violations_found_produces_no_output() {
@@ -341,7 +341,7 @@ test_lint_rule_report_reports_rule_advice() {
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_passs_script_lint_defines_rules_before_running_main() {
@@ -369,7 +369,7 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	run_with_output run_passs_lint_from_source
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
