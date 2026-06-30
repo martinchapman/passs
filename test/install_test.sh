@@ -168,4 +168,4 @@ test_install_main_zsh_fpath_unconfigured_warns_user() {
 	assert_output_contains "warning: $ZSH_COMPLETION_DIR is not in your zsh fpath"
 }
 
-. /usr/share/shunit2/shunit2
+. "$(command -v shunit2 || echo /usr/share/shunit2/shunit2)"

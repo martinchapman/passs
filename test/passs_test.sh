@@ -370,4 +370,4 @@ test_passs_main_description_add_too_few_args_shows_usage() {
 	assert_output "Usage: passs description pass-name <description>"
 }
 
-. /usr/share/shunit2/shunit2
+. "$(command -v shunit2 || echo /usr/share/shunit2/shunit2)"
