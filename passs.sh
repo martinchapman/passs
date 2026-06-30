@@ -105,12 +105,29 @@ lint_rule_remediation() {
 	"lint_${rule}_remediation"
 }
 
+lint_rule_fix() {
+	rule="$1"
+	violation="$2"
+	fn="lint_${rule}_fix"
+
+	command -v "$fn" >/dev/null 2>&1 || return 0
+	"$fn" "$violation"
+}
+
 lint_rule_report() {
 	rule="$1"
 	lint_rule_violations "$rule" | while IFS= read -r violation; do
 		lint_rule_message "$rule" "$violation"
 	done
 	lint_rule_supports "$rule" remediation && lint_rule_remediation "$rule"
+}
+
+lint_fix() {
+	lint_rules | while IFS= read -r rule; do
+		lint_rule_violations "$rule" | while IFS= read -r violation; do
+			lint_rule_fix "$rule" "$violation"
+		done
+	done
 }
 
 lint() {

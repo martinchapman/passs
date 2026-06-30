@@ -370,6 +370,32 @@ Top-level folders should be registrable domains. Put subdomains underneath the p
 Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
+test_lint_rule_fix_without_fix_function_returns_success() {
+	run_with_output lint_rule_fix subdomain_folder_name "$(printf 'foo.bar.com\tfoo.bar.com')"
+	assert_success
+	assert_output ""
+}
+
+test_lint_fix_routes_violations_to_fix_function() {
+	lint_rules() { printf '%s\n' foo; }
+	lint_foo_violations() {
+		printf '%s\n' \
+			"first" \
+			"second"
+	}
+	lint_foo_fix() {
+		printf 'lint_foo_fix %s\n' "$1"
+	}
+	register_stub lint_rules
+	register_stub lint_foo_violations
+	register_stub lint_foo_fix
+	run_with_output lint_fix
+	assert_success
+	assert_output "$(printf '%s\n%s' \
+		"lint_foo_fix first" \
+		"lint_foo_fix second")"
+}
+
 test_passs_main_version_flag_prints_version() {
 	run_with_output passs_main version
 	assert_success
