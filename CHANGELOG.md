@@ -1,8 +1,17 @@
+## [0.1.4] - 2026-06-30
+
+### ⚙️ Miscellaneous Tasks
+
+- *(lint)* Widen subdomain capture (#22)
 ## [0.1.3] - 2026-06-29
 
 ### 🚀 Features
 
 - *(lint)* No top-level gpg (#20)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.3 (#21)
 ## [0.1.2] - 2026-06-29
 
 ### ⚙️ Miscellaneous Tasks

@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-VERSION="0.1.3"
+VERSION="0.1.4"
 
 password_store_dir() { echo "$HOME/.password-store"; }
 meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
