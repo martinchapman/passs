@@ -181,7 +181,8 @@ lint_gpg_at_top_level_message() {
 }
 
 lint_gpg_at_top_level_remediation() {
-	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+}
 }
 
 ###############################################################################

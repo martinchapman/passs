@@ -258,7 +258,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
 Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -293,7 +293,7 @@ test_lint_no_violations_found_reports_remediation() {
 	run_with_output lint
 	assert_success
 	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
@@ -301,7 +301,7 @@ test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_output "error: file 'foo.gpg' is a .gpg file at the top level
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
@@ -309,7 +309,7 @@ test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_success
-	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_violations_emit_records() {
