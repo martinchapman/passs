@@ -217,7 +217,9 @@ lint_gpg_at_top_level_fix() {
 		echo "error: cannot fix '$name', '$folder/password.gpg' already exists"
 		return
 	}
-	make_dir "$store_dir/$folder" && move_file "$store_dir/$name" "$target"
+	make_dir "$store_dir/$folder" &&
+		move_file "$store_dir/$name" "$target" &&
+		echo "fixed: moved '$name' to '$folder/password.gpg'"
 }
 
 ###############################################################################
