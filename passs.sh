@@ -76,25 +76,47 @@ looks_like_subdomain() {
 }
 looks_like_ip_address() { echo "$1" | grep -qE '^[0-9.]+$'; }
 
-lint_subdomain_folder_name() {
-	is_top_level_path "$2" && looks_like_subdomain "$1" && ! looks_like_ip_address "$1" && echo "error: folder name '$1' appears to contain subdomain at $2"
+print_lint_violation() { printf '%s\t%s\n' "$1" "$2"; }
+get_lint_violation_field() { printf '%s\n' "$1" | cut -f "$2"; }
+
+lint_rules() {
+	printf '%s\n' \
+		subdomain_folder_name \
+		gpg_at_top_level
 }
 
-lint_gpg_at_top_level() {
-	top_level_gpg_files | while read -r file; do
-		basename="$(path_basename "$file")"
-		echo "error: file '$basename' is a .gpg file at the top level"
+lint_rule_supports() {
+	command -v "lint_${1}_${2}" >/dev/null 2>&1
+}
+
+lint_rule_violations() {
+	rule="$1"
+	"lint_${rule}_violations"
+}
+
+lint_rule_message() {
+	rule="$1"
+	violation="$2"
+	"lint_${rule}_message" "$violation"
+}
+
+lint_rule_remediation() {
+	rule="$1"
+	"lint_${rule}_remediation"
+}
+
+lint_rule_report() {
+	rule="$1"
+	lint_rule_violations "$rule" | while IFS= read -r violation; do
+		lint_rule_message "$rule" "$violation"
 	done
+	lint_rule_supports "$rule" remediation && lint_rule_remediation "$rule"
 }
 
 lint() {
-	password_store_dirs | while read -r dir; do
-		basename="$(path_basename "$dir")"
-		[ "$basename" = ".password-store" ] && continue
-		relative_path="$(path_relative_to_store "$dir")"
-		lint_subdomain_folder_name "$basename" "$relative_path"
+	lint_rules | while IFS= read -r rule; do
+		lint_rule_report "$rule"
 	done
-	lint_gpg_at_top_level
 }
 
 passs_main() {
@@ -142,3 +164,47 @@ passs_main() {
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
+
+###############################################################################
+# Lint rule: gpg_at_top_level
+###############################################################################
+
+lint_gpg_at_top_level_violations() {
+	top_level_gpg_files | while read -r file; do
+		basename="$(path_basename "$file")"
+		relative_path="$(path_relative_to_store "$file")"
+		print_lint_violation "$basename" "$relative_path"
+	done
+}
+
+lint_gpg_at_top_level_message() {
+	basename="$(get_lint_violation_field "$1" 1)"
+	echo "error: file '$basename' is a .gpg file at the top level"
+}
+
+lint_gpg_at_top_level_remediation() {
+	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+}
+
+###############################################################################
+# Lint rule: subdomain_folder_name
+###############################################################################
+
+lint_subdomain_folder_name_violations() {
+	password_store_dirs | while read -r dir; do
+		basename="$(path_basename "$dir")"
+		[ "$basename" = ".password-store" ] && continue
+		relative_path="$(path_relative_to_store "$dir")"
+		is_top_level_path "$relative_path" && looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && print_lint_violation "$basename" "$relative_path"
+	done
+}
+
+lint_subdomain_folder_name_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: folder name '$name' appears to contain subdomain at $path"
+}
+
+lint_subdomain_folder_name_remediation() {
+	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+}
