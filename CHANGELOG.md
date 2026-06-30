@@ -1,8 +1,14 @@
+## [0.1.5] - 2026-06-30
+
+### 🚜 Refactor
+
+- *(lint)* Add expected rule structure (#24)
 ## [0.1.4] - 2026-06-30
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(lint)* Widen subdomain capture (#22)
+- V0.1.4 (#23)
 ## [0.1.3] - 2026-06-29
 
 ### 🚀 Features
