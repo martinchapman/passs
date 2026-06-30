@@ -5,6 +5,8 @@ password_store_dir() { echo "$HOME/.password-store"; }
 meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
 parent_dir() { dirname "$1"; }
 make_dir() { mkdir -p "$1"; }
+move_file() { mv "$1" "$2"; }
+path_exists() { [ -e "$1" ]; }
 meta_file_exists() { [ -f "$1" ]; }
 write_default_meta_file() { printf '{"tags":[],"description":""}\n' >"$1"; }
 
@@ -105,12 +107,29 @@ lint_rule_remediation() {
 	"lint_${rule}_remediation"
 }
 
+lint_rule_fix() {
+	rule="$1"
+	violation="$2"
+	fn="lint_${rule}_fix"
+
+	command -v "$fn" >/dev/null 2>&1 || return 0
+	"$fn" "$violation"
+}
+
 lint_rule_report() {
 	rule="$1"
 	lint_rule_violations "$rule" | while IFS= read -r violation; do
 		lint_rule_message "$rule" "$violation"
 	done
 	lint_rule_supports "$rule" remediation && lint_rule_remediation "$rule"
+}
+
+lint_fix() {
+	lint_rules | while IFS= read -r rule; do
+		lint_rule_violations "$rule" | while IFS= read -r violation; do
+			lint_rule_fix "$rule" "$violation"
+		done
+	done
 }
 
 lint() {
@@ -157,13 +176,16 @@ passs_main() {
 			;;
 		esac
 		;;
-	lint) lint ;;
+	lint)
+		case "$2" in
+		--fix) lint_fix ;;
+		*) lint ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
 	*) pass "$@" ;;
 	esac
 }
-
-[ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
 
 ###############################################################################
 # Lint rule: gpg_at_top_level
@@ -183,7 +205,21 @@ lint_gpg_at_top_level_message() {
 }
 
 lint_gpg_at_top_level_remediation() {
-	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+	echo "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+}
+
+lint_gpg_at_top_level_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	folder="${name%.gpg}"
+	store_dir="$(password_store_dir)"
+	target="$store_dir/$folder/password.gpg"
+	path_exists "$target" && {
+		echo "error: cannot fix '$name', '$folder/password.gpg' already exists"
+		return
+	}
+	make_dir "$store_dir/$folder" &&
+		move_file "$store_dir/$name" "$target" &&
+		echo "fixed: moved '$name' to '$folder/password.gpg'"
 }
 
 ###############################################################################
@@ -208,3 +244,5 @@ lint_subdomain_folder_name_message() {
 lint_subdomain_folder_name_remediation() {
 	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
+
+[ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"

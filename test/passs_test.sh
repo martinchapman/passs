@@ -258,7 +258,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
 Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -293,7 +293,7 @@ test_lint_no_violations_found_reports_remediation() {
 	run_with_output lint
 	assert_success
 	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
@@ -301,7 +301,7 @@ test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_output "error: file 'foo.gpg' is a .gpg file at the top level
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
@@ -309,7 +309,7 @@ test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_success
-	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar.gpg/password.gpg."
+	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
 test_lint_gpg_at_top_level_violations_emit_records() {
@@ -339,6 +339,109 @@ test_lint_rule_report_reports_rule_advice() {
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
 	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+}
+
+test_passs_script_lint_defines_rules_before_running_main() {
+	run_passs_lint_from_source() {
+		find() {
+			case " $* " in
+			*" -type d "*) printf '%s\n' "$HOME/.password-store" "$HOME/.password-store/foo.bar.com" ;;
+			*" -maxdepth 1 "*) return 0 ;;
+			*) return 1 ;;
+			esac
+		}
+
+		for rule in $(lint_rules); do
+			unset -f "lint_${rule}_violations"
+			unset -f "lint_${rule}_message"
+			unset -f "lint_${rule}_remediation"
+			unset -f "lint_${rule}_fix"
+		done
+
+		set -- lint
+		PASSS_TESTING=0 . ./passs.sh
+	}
+	register_stub run_passs_lint_from_source
+
+	run_with_output run_passs_lint_from_source
+	assert_success
+	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
+Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+}
+
+test_lint_rule_fix_without_fix_function_returns_success() {
+	run_with_output lint_rule_fix subdomain_folder_name "$(printf 'foo.bar.com\tfoo.bar.com')"
+	assert_success
+	assert_output ""
+}
+
+test_lint_gpg_at_top_level_fix_target_absent_moves_into_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() {
+		append_call "make_dir $1"
+		return 0
+	}
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/foo" \
+		"move_file $TEST_ROOT/store/foo.gpg $TEST_ROOT/store/foo/password.gpg")"
+}
+
+test_lint_gpg_at_top_level_fix_target_absent_reports_change() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { return 0; }
+	move_file() { return 0; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
+	assert_success
+	assert_output "fixed: moved 'foo.gpg' to 'foo/password.gpg'"
+}
+
+test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
+	assert_success
+	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
+	assert_calls ""
+}
+
+test_lint_fix_routes_violations_to_fix_function() {
+	lint_rules() { printf '%s\n' foo; }
+	lint_foo_violations() {
+		printf '%s\n' \
+			"first" \
+			"second"
+	}
+	lint_foo_fix() {
+		printf 'lint_foo_fix %s\n' "$1"
+	}
+	register_stub lint_rules
+	register_stub lint_foo_violations
+	register_stub lint_foo_fix
+	run_with_output lint_fix
+	assert_success
+	assert_output "$(printf '%s\n%s' \
+		"lint_foo_fix first" \
+		"lint_foo_fix second")"
 }
 
 test_passs_main_version_flag_prints_version() {
@@ -393,6 +496,30 @@ test_passs_main_lint_command_routes_to_lint() {
 	}
 	register_stub lint
 	run_with_output passs_main lint
+	assert_success
+	assert_output "lint"
+}
+
+test_passs_main_lint_fix_flag_routes_to_lint_fix() {
+	lint_fix() {
+		printf 'lint_fix\n'
+	}
+	register_stub lint_fix
+	run_with_output passs_main lint --fix
+	assert_success
+	assert_output "lint_fix"
+}
+
+test_passs_main_lint_fix_word_routes_to_lint() {
+	lint() {
+		printf 'lint\n'
+	}
+	lint_fix() {
+		printf 'lint_fix\n'
+	}
+	register_stub lint
+	register_stub lint_fix
+	run_with_output passs_main lint fix
 	assert_success
 	assert_output "lint"
 }
