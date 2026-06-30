@@ -118,7 +118,9 @@ lint_rule_fix() {
 
 lint_rule_report() {
 	rule="$1"
-	lint_rule_violations "$rule" | while IFS= read -r violation; do
+	violations="$(lint_rule_violations "$rule")"
+	[ -n "$violations" ] || return 0
+	printf '%s\n' "$violations" | while IFS= read -r violation; do
 		lint_rule_message "$rule" "$violation"
 	done
 	lint_rule_supports "$rule" remediation && lint_rule_remediation "$rule"
@@ -178,7 +180,10 @@ passs_main() {
 		;;
 	lint)
 		case "$2" in
-		--fix) lint_fix ;;
+		--fix)
+			lint
+			lint_fix
+			;;
 		*) lint ;;
 		esac
 		;;
@@ -242,7 +247,36 @@ lint_subdomain_folder_name_message() {
 }
 
 lint_subdomain_folder_name_remediation() {
-	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+}
+
+subdomain_to_nested_path() {
+	tld="${1##*.}"
+	without_tld="${1%.*}"
+	registrable="${without_tld##*.}.$tld"
+	subdomain_labels="${without_tld%.*}"
+	nested="$registrable"
+	while [ -n "$subdomain_labels" ]; do
+		label="${subdomain_labels##*.}"
+		nested="$nested/$label"
+		[ "$subdomain_labels" = "$label" ] && break
+		subdomain_labels="${subdomain_labels%.*}"
+	done
+	echo "$nested"
+}
+
+lint_subdomain_folder_name_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	store_dir="$(password_store_dir)"
+	target_relative="$(subdomain_to_nested_path "$name")"
+	target="$store_dir/$target_relative"
+	path_exists "$target" && {
+		echo "error: cannot fix '$name', '$target_relative' already exists"
+		return
+	}
+	make_dir "$(parent_dir "$target")" &&
+		move_file "$store_dir/$name" "$target" &&
+		echo "fixed: moved '$name' to '$target_relative'"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"

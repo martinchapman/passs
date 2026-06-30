@@ -257,8 +257,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -282,18 +281,17 @@ test_lint_subdomain_folder_message_formats_record() {
 test_lint_subdomain_folder_remediation_reports_overall_advice() {
 	run_with_output lint_subdomain_folder_name_remediation
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
-test_lint_no_violations_found_reports_remediation() {
+test_lint_no_violations_found_produces_no_output() {
 	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
 	top_level_gpg_files() { return 0; }
 	register_stub password_store_dirs
 	register_stub top_level_gpg_files
 	run_with_output lint
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+	assert_output ""
 }
 
 test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
@@ -304,12 +302,12 @@ test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
 Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
-test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
+test_lint_gpg_at_top_level_no_gpg_files_produces_no_output() {
 	top_level_gpg_files() { return 0; }
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_success
-	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+	assert_output ""
 }
 
 test_lint_gpg_at_top_level_violations_emit_records() {
@@ -334,11 +332,16 @@ gpg_at_top_level"
 }
 
 test_lint_rule_report_reports_rule_advice() {
-	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
+	password_store_dirs() {
+		printf '%s\n' \
+			"$HOME/.password-store" \
+			"$HOME/.password-store/foo.bar.com"
+	}
 	register_stub password_store_dirs
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_passs_script_lint_defines_rules_before_running_main() {
@@ -366,12 +369,11 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	run_with_output run_passs_lint_from_source
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
-	run_with_output lint_rule_fix subdomain_folder_name "$(printf 'foo.bar.com\tfoo.bar.com')"
+	run_with_output lint_rule_fix missing "$(printf 'foo\tfoo')"
 	assert_success
 	assert_output ""
 }
@@ -421,6 +423,66 @@ test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
+	assert_calls ""
+}
+
+test_subdomain_to_nested_path_three_labels_nests_under_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.com"
+	assert_success
+	assert_output "bar.com/foo"
+}
+
+test_subdomain_to_nested_path_four_labels_nests_each_label_in_reverse() {
+	run_with_output subdomain_to_nested_path "foo.bar.baz.com"
+	assert_success
+	assert_output "baz.com/bar/foo"
+}
+
+test_lint_subdomain_folder_name_fix_target_absent_moves_into_nested_path() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() {
+		append_call "make_dir $1"
+		return 0
+	}
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/baz.com/bar" \
+		"move_file $TEST_ROOT/store/foo.bar.baz.com $TEST_ROOT/store/baz.com/bar/foo")"
+}
+
+test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { return 0; }
+	move_file() { return 0; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
+	assert_success
+	assert_output "fixed: moved 'foo.bar.baz.com' to 'baz.com/bar/foo'"
+}
+
+test_lint_subdomain_folder_name_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tfoo.bar.com')"
+	assert_success
+	assert_output "error: cannot fix 'foo.bar.com', 'bar.com/foo' already exists"
 	assert_calls ""
 }
 
@@ -500,14 +562,33 @@ test_passs_main_lint_command_routes_to_lint() {
 	assert_output "lint"
 }
 
-test_passs_main_lint_fix_flag_routes_to_lint_fix() {
+test_passs_main_lint_fix_flag_routes_to_lint_then_lint_fix() {
+	lint() {
+		printf 'lint\n'
+	}
 	lint_fix() {
 		printf 'lint_fix\n'
 	}
+	register_stub lint
 	register_stub lint_fix
 	run_with_output passs_main lint --fix
 	assert_success
-	assert_output "lint_fix"
+	assert_output "lint
+lint_fix"
+}
+
+test_passs_main_lint_fix_flag_reports_lint_when_nothing_is_fixed() {
+	lint() {
+		printf 'lint errors\n'
+	}
+	lint_fix() {
+		return 0
+	}
+	register_stub lint
+	register_stub lint_fix
+	run_with_output passs_main lint --fix
+	assert_success
+	assert_output "lint errors"
 }
 
 test_passs_main_lint_fix_word_routes_to_lint() {
