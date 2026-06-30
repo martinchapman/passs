@@ -245,6 +245,9 @@ test_lint_subdomain_folder_found_reports_error() {
 		printf '%s\n' \
 			"$HOME/.password-store" \
 			"$HOME/.password-store/foo.bar.baz.com" \
+			"$HOME/.password-store/foo.bar.com" \
+			"$HOME/.password-store/foo.ac.uk" \
+			"$HOME/.password-store/bar.co.uk" \
 			"$HOME/.password-store/192.168.0.1" \
 			"$HOME/.password-store/bar.com/baz"
 	}
@@ -252,7 +255,8 @@ test_lint_subdomain_folder_found_reports_error() {
 	register_stub password_store_dirs
 	register_stub top_level_gpg_files
 	run_with_output lint
-	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com"
+	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
+error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com"
 }
 
 test_lint_no_violations_found_produces_no_output() {
