@@ -1,8 +1,17 @@
+## [0.1.7] - 2026-06-30
+
+### 🚀 Features
+
+- *(lint)* Add subdomain folder name fix (#28)
 ## [0.1.6] - 2026-06-30
 
 ### 🚀 Features
 
 - *(lint)* Add top-level gpg fix (#26)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.6 (#27)
 ## [0.1.5] - 2026-06-30
 
 ### 🚜 Refactor
