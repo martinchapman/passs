@@ -486,6 +486,30 @@ test_passs_main_lint_command_routes_to_lint() {
 	assert_output "lint"
 }
 
+test_passs_main_lint_fix_flag_routes_to_lint_fix() {
+	lint_fix() {
+		printf 'lint_fix\n'
+	}
+	register_stub lint_fix
+	run_with_output passs_main lint --fix
+	assert_success
+	assert_output "lint_fix"
+}
+
+test_passs_main_lint_fix_word_routes_to_lint() {
+	lint() {
+		printf 'lint\n'
+	}
+	lint_fix() {
+		printf 'lint_fix\n'
+	}
+	register_stub lint
+	register_stub lint_fix
+	run_with_output passs_main lint fix
+	assert_success
+	assert_output "lint"
+}
+
 test_passs_main_unknown_command_delegates_to_pass() {
 	pass() {
 		printf 'pass %s %s\n' "$1" "$2"

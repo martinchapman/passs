@@ -176,7 +176,12 @@ passs_main() {
 			;;
 		esac
 		;;
-	lint) lint ;;
+	lint)
+		case "$2" in
+		--fix) lint_fix ;;
+		*) lint ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
 	*) pass "$@" ;;
 	esac
