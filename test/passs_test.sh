@@ -257,8 +257,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -285,15 +284,14 @@ test_lint_subdomain_folder_remediation_reports_overall_advice() {
 	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
 
-test_lint_no_violations_found_reports_remediation() {
+test_lint_no_violations_found_produces_no_output() {
 	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
 	top_level_gpg_files() { return 0; }
 	register_stub password_store_dirs
 	register_stub top_level_gpg_files
 	run_with_output lint
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+	assert_output ""
 }
 
 test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
@@ -304,12 +302,12 @@ test_lint_gpg_at_top_level_gpg_file_found_reports_error_and_remediation() {
 Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
 }
 
-test_lint_gpg_at_top_level_no_gpg_files_reports_remediation() {
+test_lint_gpg_at_top_level_no_gpg_files_produces_no_output() {
 	top_level_gpg_files() { return 0; }
 	register_stub top_level_gpg_files
 	run_with_output lint_rule_report gpg_at_top_level
 	assert_success
-	assert_output "Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+	assert_output ""
 }
 
 test_lint_gpg_at_top_level_violations_emit_records() {
@@ -334,11 +332,16 @@ gpg_at_top_level"
 }
 
 test_lint_rule_report_reports_rule_advice() {
-	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
+	password_store_dirs() {
+		printf '%s\n' \
+			"$HOME/.password-store" \
+			"$HOME/.password-store/foo.bar.com"
+	}
 	register_stub password_store_dirs
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
+	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
 
 test_passs_script_lint_defines_rules_before_running_main() {
@@ -366,8 +369,7 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	run_with_output run_passs_lint_from_source
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app.
-Password files should live inside site folders, for example foo.bar.gpg -> foo.bar/password.gpg."
+Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/app."
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {

@@ -118,7 +118,9 @@ lint_rule_fix() {
 
 lint_rule_report() {
 	rule="$1"
-	lint_rule_violations "$rule" | while IFS= read -r violation; do
+	violations="$(lint_rule_violations "$rule")"
+	[ -n "$violations" ] || return 0
+	printf '%s\n' "$violations" | while IFS= read -r violation; do
 		lint_rule_message "$rule" "$violation"
 	done
 	lint_rule_supports "$rule" remediation && lint_rule_remediation "$rule"
