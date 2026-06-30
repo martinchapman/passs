@@ -70,7 +70,10 @@ top_level_gpg_files() { find "$(password_store_dir)" -maxdepth 1 -name "*.gpg" -
 path_basename() { basename "$1"; }
 path_relative_to_store() { echo "$1" | sed "s|$(password_store_dir)/||"; }
 is_top_level_path() { echo "$1" | grep -qv '/'; }
-looks_like_subdomain() { echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.'; }
+looks_like_subdomain() {
+	echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+' || return 1
+	! echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]{1,3}\.[a-zA-Z]{2}$'
+}
 looks_like_ip_address() { echo "$1" | grep -qE '^[0-9.]+$'; }
 
 lint_subdomain_folder_name() {
