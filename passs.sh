@@ -166,6 +166,21 @@ names_vault_entry() {
 	return 1
 }
 
+relocates_vault() {
+	case "$1" in
+	mv | cp | rename | copy) shift ;;
+	*) return 1 ;;
+	esac
+	for arg in "$@"; do
+		case "$arg" in
+		-*) ;;
+		vault | vault/) return 0 ;;
+		*) return 1 ;;
+		esac
+	done
+	return 1
+}
+
 ensure_vault_ignored() { ensure_line "$(password_store_dir)/.gitignore" "/vault/"; }
 
 vault_tar() { tar -C "$1" --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - .; }
@@ -307,7 +322,10 @@ passs_main() {
 		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
 	*)
-		if names_vault_entry "$@"; then
+		if relocates_vault "$@"; then
+			echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
+			return 1
+		elif names_vault_entry "$@"; then
 			ensure_vault_ignored && vault_pass "$@"
 		else
 			pass "$@"

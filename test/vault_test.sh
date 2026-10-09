@@ -195,6 +195,38 @@ test_passs_main_other_git_command_skips_vault() {
 	assert_calls "pass git log"
 }
 
+test_relocates_vault_move_of_vault_returns_success() {
+	run relocates_vault mv -f vault/ archive
+	assert_success
+}
+
+test_relocates_vault_copy_of_vault_returns_success() {
+	run relocates_vault cp vault archive
+	assert_success
+}
+
+test_relocates_vault_move_of_vault_entry_returns_failure() {
+	run relocates_vault mv vault/foo.com bar.com
+	assert_failure
+}
+
+test_relocates_vault_move_into_vault_returns_failure() {
+	run relocates_vault mv foo.com vault
+	assert_failure
+}
+
+test_relocates_vault_other_command_returns_failure() {
+	run relocates_vault rm -r vault
+	assert_failure
+}
+
+test_passs_main_whole_vault_move_reports_error_without_pass() {
+	stub_recording ensure_vault_ignored vault_pass pass
+	run_with_output passs_main mv vault archive
+	assert_failure
+	assert_output "error: moving or copying the whole vault isn't supported, move its entries instead"
+}
+
 test_passs_main_vault_entry_command_ensures_ignored_then_runs_vault_pass() {
 	stub_recording ensure_vault_ignored vault_pass pass
 	run passs_main insert vault/foo.com/bar
