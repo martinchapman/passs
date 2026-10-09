@@ -199,6 +199,37 @@ vault_seal() {
 	return $status
 }
 
+vault_git() { git -C "$(vault_dir)" "$@"; }
+
+vault_history() {
+	vault_git rev-list --reverse "$1..HEAD" | while IFS= read -r commit; do
+		message="$(vault_git show -s --format=%B "$commit")"
+		printf 'commit refs/heads/main\n%s\ndata %s\n%s\n\n' \
+			"$(vault_git show -s --date=raw --format='author %an <%ae> %ad%ncommitter %cn <%ce> %cd' "$commit")" \
+			"$(($(printf '%s\n' "$message" | wc -c)))" "$message"
+	done
+}
+
+vault_pass() {
+	history_repository="$(mktemp -d "$(store_temp_path vault-history-XXXXXX)")" &&
+		make_dir "$(vault_dir)" &&
+		vault_git init -q --separate-git-dir="$history_repository" &&
+		vault_git add -A &&
+		vault_git commit -q --allow-empty -m snapshot &&
+		snapshot="$(vault_git rev-parse HEAD)" || {
+		remove_path "$history_repository" "$(vault_dir)/.git"
+		return 1
+	}
+	trap : INT TERM HUP
+	pass "$@"
+	status=$?
+	trap - INT TERM HUP
+	history="$(vault_history "$snapshot")"
+	[ -z "$history" ] || printf '%s\n\n' "$history" >>"$(vault_dir)/.githistory"
+	remove_path "$history_repository" "$(vault_dir)/.git"
+	return $status
+}
+
 vault_unseal() {
 	path_exists "$(vault_blob_path)" || return 0
 	temp_dir="$(mktemp -d "$(store_temp_path vault-XXXXXX)")" &&
@@ -262,7 +293,13 @@ passs_main() {
 		esac
 		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
-	*) { ! names_vault_entry "$@" || ensure_vault_ignored; } && pass "$@" ;;
+	*)
+		if names_vault_entry "$@"; then
+			ensure_vault_ignored && vault_pass "$@"
+		else
+			pass "$@"
+		fi
+		;;
 	esac
 }
 

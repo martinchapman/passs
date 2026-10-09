@@ -194,11 +194,120 @@ test_passs_main_other_git_command_skips_vault() {
 	assert_calls "pass git log"
 }
 
-test_passs_main_vault_entry_command_ensures_ignored_before_pass() {
-	stub_recording ensure_vault_ignored pass
+test_passs_main_vault_entry_command_ensures_ignored_then_runs_vault_pass() {
+	stub_recording ensure_vault_ignored vault_pass pass
 	run passs_main insert vault/foo.com/bar
 	assert_success
-	assert_calls "$(printf '%s\n%s' "ensure_vault_ignored " "pass insert vault/foo.com/bar")"
+	assert_calls "$(printf '%s\n%s' "ensure_vault_ignored " "vault_pass insert vault/foo.com/bar")"
+}
+
+test_passs_main_vault_entry_command_ignore_fails_skips_pass() {
+	stub_failing ensure_vault_ignored
+	stub_recording vault_pass pass
+	run passs_main insert vault/foo.com/bar
+	assert_failure
+	assert_calls "ensure_vault_ignored "
+}
+
+test_vault_git_runs_git_inside_vault() {
+	git() { printf 'git %s\n' "$*"; }
+	register_stub git
+	run_with_output vault_git status
+	assert_output "git -C $HOME/.password-store/vault status"
+}
+
+test_vault_history_commits_after_snapshot_print_fast_import_blocks() {
+	vault_git() {
+		case "$1 $3" in
+		"rev-list "*) printf '%s\n' foo bar ;;
+		"show --format=%B") printf 'Add %s.\n' "$4" ;;
+		*) printf 'author a <a@b> 1 +0000\ncommitter a <a@b> 1 +0000\n' ;;
+		esac
+	}
+	register_stub vault_git
+	run_with_output vault_history snapshot
+	assert_success
+	assert_output "commit refs/heads/main
+author a <a@b> 1 +0000
+committer a <a@b> 1 +0000
+data 9
+Add foo.
+
+commit refs/heads/main
+author a <a@b> 1 +0000
+committer a <a@b> 1 +0000
+data 9
+Add bar."
+}
+
+test_vault_history_no_commits_prints_nothing() {
+	vault_git() { return 0; }
+	register_stub vault_git
+	run_with_output vault_history snapshot
+	assert_success
+	assert_output ""
+}
+
+stub_vault_pass_setup() {
+	stub_store_in_tmpdir "$1"
+	vault_git() {
+		append_call "vault_git $1"
+		[ "$1" = "rev-parse" ] && printf 'snapshot\n'
+		return 0
+	}
+	register_stub vault_git
+}
+
+test_vault_pass_pass_commits_appends_history_and_cleans_up() {
+	stub_vault_pass_setup appending
+	printf 'old\n\n' >"$STUB_STORE_DIR/vault/.githistory"
+	stub_recording pass
+	vault_history() { printf 'new\n'; }
+	register_stub vault_history
+	run vault_pass insert vault/foo.com/bar
+	assert_success
+	assertEquals "old
+
+new" "$(cat "$STUB_STORE_DIR/vault/.githistory")"
+	assert_calls "$(printf '%s\n%s\n%s\n%s' \
+		"vault_git init" \
+		"vault_git add" \
+		"vault_git commit" \
+		"pass insert vault/foo.com/bar")"
+	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
+}
+
+test_vault_pass_no_history_leaves_history_file_absent() {
+	stub_vault_pass_setup reading
+	stub_recording pass
+	stub_recording vault_history
+	run vault_pass show vault/foo.com/bar
+	assert_success
+	assertFalse "expected no history file" "[ -e '$STUB_STORE_DIR/vault/.githistory' ]"
+}
+
+test_vault_pass_pass_fails_returns_its_status() {
+	stub_vault_pass_setup failing
+	pass() { return 3; }
+	register_stub pass
+	stub_recording vault_history
+	run vault_pass insert vault/foo.com/bar
+	assert_status 3
+	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
+}
+
+test_vault_pass_snapshot_fails_skips_pass_and_cleans_up() {
+	stub_store_in_tmpdir snapshotting
+	vault_git() {
+		append_call "vault_git $1"
+		[ "$1" != "commit" ]
+	}
+	register_stub vault_git
+	stub_recording pass
+	run vault_pass insert vault/foo.com/bar
+	assert_failure
+	assert_calls "$(printf '%s\n%s\n%s' "vault_git init" "vault_git add" "vault_git commit")"
+	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
 }
 
 . "$(command -v shunit2 || echo /usr/share/shunit2/shunit2)"
