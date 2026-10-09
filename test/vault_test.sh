@@ -358,7 +358,13 @@ test_vault_pass_link_removed_before_seal() {
 	stub_vault_pass_setup linking
 	stub_recording pass
 	vault_history() { printf 'new\n'; }
-	vault_seal() { append_call "vault_seal link=$(ls -A "$STUB_STORE_DIR/vault" | grep -c '^\.git$')"; }
+	vault_seal() {
+		if path_exists "$STUB_STORE_DIR/vault/.git"; then
+			append_call "vault_seal link=1"
+		else
+			append_call "vault_seal link=0"
+		fi
+	}
 	register_stub vault_history
 	register_stub vault_seal
 	touch "$STUB_STORE_DIR/vault/.git"
