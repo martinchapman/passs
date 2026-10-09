@@ -367,6 +367,7 @@ test_lint_rules_lists_registered_rule_ids() {
 	assert_success
 	assert_output "subdomain_folder_name
 gpg_at_top_level
+redundant_address
 leaked_id"
 }
 
@@ -690,6 +691,133 @@ test_lint_leaked_id_remediation_reports_overall_advice() {
 	run_with_output lint_leaked_id_remediation
 	assert_success
 	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example with 'passs generate --secret foo.com', or into the vault."
+}
+
+test_repeated_site_address_address_in_name_prints_address() {
+	run_with_output repeated_site_address foo.com/bar.foo.com
+	assert_output "foo.com"
+}
+
+test_repeated_site_address_subdomain_folder_prints_longest_address() {
+	run_with_output repeated_site_address foo.com/baz/bar@baz.foo.com
+	assert_output "baz.foo.com"
+}
+
+test_repeated_site_address_no_address_in_name_prints_nothing() {
+	run_with_output repeated_site_address foo.com/bar@foo.net
+	assert_output ""
+}
+
+test_has_redundant_address_address_in_name_returns_success() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/bar.foo.com
+	assert_success
+}
+
+test_has_redundant_address_email_address_returns_failure() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/bar@foo.com
+	assert_failure
+}
+
+test_has_redundant_address_name_is_label_in_any_case_returns_success() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/Foo
+	assert_success
+}
+
+test_has_redundant_address_label_inside_name_returns_failure() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/barfoo
+	assert_failure
+}
+
+test_redundant_address_fixed_name_address_at_end_strips_address_and_separator() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/bar.foo.com
+	assert_output "bar"
+}
+
+test_redundant_address_fixed_name_address_in_middle_joins_remainder() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/bar.foo.com-baz
+	assert_output "barbaz"
+}
+
+test_redundant_address_fixed_name_whole_name_is_address_returns_user() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/foo.com
+	assert_output "user"
+}
+
+test_redundant_address_fixed_name_no_address_returns_user() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/foo
+	assert_output "user"
+}
+
+test_lint_redundant_address_violations_emit_records_for_repeats_only() {
+	web_entries() { printf '%s\n' foo.com/bar.foo.com foo.com/baz; }
+	register_stub web_entries
+	run_with_output lint_redundant_address_violations
+	assert_output "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+}
+
+test_lint_redundant_address_message_formats_record() {
+	run_with_output lint_redundant_address_message "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+	assert_success
+	assert_output "error: entry name 'bar.foo.com' repeats its site address at foo.com/bar.foo.com"
+}
+
+test_lint_redundant_address_remediation_reports_overall_advice() {
+	run_with_output lint_redundant_address_remediation
+	assert_success
+	assert_output "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+}
+
+test_lint_redundant_address_fix_target_absent_renames_entry() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+	assert_success
+	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+}
+
+test_lint_redundant_address_fix_target_absent_reports_change() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	move_file() { return 0; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
+	assert_success
+	assert_output "fixed: moved 'foo.com/foo.com' to 'foo.com/user'"
+}
+
+test_lint_redundant_address_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
+	assert_success
+	assert_output "error: cannot fix 'foo.com/foo.com', 'foo.com/user' already exists"
+	assert_calls ""
 }
 
 test_passs_main_version_flag_prints_version() {

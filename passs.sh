@@ -109,6 +109,7 @@ lint_rules() {
 	printf '%s\n' \
 		subdomain_folder_name \
 		gpg_at_top_level \
+		redundant_address \
 		leaked_id
 }
 
@@ -544,6 +545,70 @@ lint_leaked_id_message() {
 
 lint_leaked_id_remediation() {
 	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example with 'passs generate --secret foo.com', or into the vault."
+}
+
+###############################################################################
+# Lint rule: redundant_address
+###############################################################################
+
+repeated_site_address() {
+	host=
+	match=
+	IFS=/
+	for folder in ${1%/*}; do
+		host="$folder${host:+.$host}"
+		case "${1##*/}" in *"$host"*) match="$host" ;; esac
+	done
+	unset IFS
+	echo "$match"
+}
+
+has_redundant_address() {
+	case "${1##*/}" in *@*) return 1 ;; esac
+	[ -n "$(repeated_site_address "$1")" ] ||
+		[ "$(printf '%s' "${1##*/}" | tr '[:upper:]' '[:lower:]')" = "${1%%.*}" ]
+}
+
+redundant_address_fixed_name() {
+	address="$(repeated_site_address "$1")"
+	[ -n "$address" ] || {
+		echo user
+		return
+	}
+	name="${1##*/}"
+	before="${name%%"$address"*}"
+	after="${name#*"$address"}"
+	name="${before%[._-]}${after#[._-]}"
+	echo "${name:-user}"
+}
+
+lint_redundant_address_violations() {
+	web_entries | while read -r relative_path; do
+		has_redundant_address "$relative_path" &&
+			print_lint_violation "${relative_path##*/}" "$relative_path"
+	done
+}
+
+lint_redundant_address_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: entry name '$name' repeats its site address at $path"
+}
+
+lint_redundant_address_remediation() {
+	echo "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+}
+
+lint_redundant_address_fix() {
+	path="$(get_lint_violation_field "$1" 2)"
+	store_dir="$(password_store_dir)"
+	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$path")"
+	path_exists "$store_dir/$target_relative.gpg" && {
+		echo "error: cannot fix '$path', '$target_relative' already exists"
+		return
+	}
+	move_file "$store_dir/$path.gpg" "$store_dir/$target_relative.gpg" &&
+		echo "fixed: moved '$path' to '$target_relative'"
 }
 
 ###############################################################################
