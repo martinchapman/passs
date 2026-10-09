@@ -108,7 +108,8 @@ get_lint_violation_field() { printf '%s\n' "$1" | cut -f "$2"; }
 lint_rules() {
 	printf '%s\n' \
 		subdomain_folder_name \
-		gpg_at_top_level
+		gpg_at_top_level \
+		leaked_id
 }
 
 lint_rule_supports() {
@@ -496,6 +497,53 @@ lint_subdomain_folder_name_fix() {
 	make_dir "$(parent_dir "$target")" &&
 		move_file "$store_dir/$path" "$target" &&
 		echo "fixed: moved '$path' to '$target_relative'"
+}
+
+###############################################################################
+# Lint rule: leaked_id
+###############################################################################
+
+user_full_name() { getent passwd "$USER" | cut -d: -f5 | cut -d, -f1; }
+
+generic_account_words() {
+	printf '%s\n' access account admin administrator api app backup codes config demo dev developer \
+		email key login memorable other password phone pin root secret service ssh temp test token \
+		user username vpn
+}
+
+web_entries() {
+	store_dir="$(password_store_dir)"
+	find "$store_dir" -path "$store_dir/.git" -prune -o -path "$(vault_dir)" -prune -o -name '*.gpg' -type f -print |
+		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E '^[^/]*\.[^/]*/'
+}
+
+looks_like_id() {
+	case "$1" in
+	*@* | hidden_credentials_[0-9]*) return 1 ;;
+	esac
+	generic_account_words | grep -qixF "$1" && return 1
+	for part in $2; do
+		printf '%s\n' "$1" | grep -qiF "$part" && return 1
+	done
+	return 0
+}
+
+lint_leaked_id_violations() {
+	user_name="$(user_full_name)"
+	web_entries | while read -r relative_path; do
+		looks_like_id "${relative_path##*/}" "$user_name" &&
+			print_lint_violation "${relative_path##*/}" "$relative_path"
+	done
+}
+
+lint_leaked_id_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: entry name '$name' appears to be an id at $path"
+}
+
+lint_leaked_id_remediation() {
+	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example with 'passs generate --secret foo.com', or into the vault."
 }
 
 ###############################################################################
