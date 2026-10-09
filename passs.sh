@@ -304,6 +304,31 @@ vault_unseal() {
 		move_file "$temp_dir" "$(vault_dir)"
 }
 
+passs_help() {
+	vault="$(vault_name)"
+	cat <<EOF
+Usage: passs <command> [args]
+
+Commands:
+  tag pass-name <tag>               Add a tag to an entry and commit it
+  tag list <tag>                    List entries with a tag
+  description pass-name <text>      Set an entry's description and commit it
+  description get pass-name         Print an entry's description
+  lint [--fix]                      Report store structure problems, and fix them with --fix
+  git push|pull [args]              Run pass git, encrypting and decrypting the vault
+  version, --version                Print the version
+  help, -h, --help                  Show this help
+
+Vault:
+  Entries under $vault/ are committed as one encrypted file ($(vault_blob_name)), so their names never reach the remote.
+  Manage them with passs, for example 'passs insert $vault/foo.com/bar', so each change is committed.
+  passs git pull decrypts the vault after pulling.
+  The commits pass would make for vault entries are kept in $vault/.githistory as a git fast-import stream.
+
+For all other functionality, call pass directly (see 'pass help').
+EOF
+}
+
 passs_main() {
 	case "$1" in
 	tag)
@@ -359,6 +384,7 @@ passs_main() {
 		esac
 		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
+	help | -h | --help) passs_help ;;
 	*)
 		if relocates_vault "$@"; then
 			echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2

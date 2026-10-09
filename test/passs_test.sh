@@ -618,6 +618,16 @@ test_passs_main_version_flag_prints_version() {
 	assert_output "pass wrapper v$VERSION"
 }
 
+test_passs_main_help_flags_print_help() {
+	for flag in help -h --help; do
+		run_with_output passs_main "$flag"
+		assert_success
+		assert_output_contains "Usage: passs <command> [args]"
+		assert_output_contains "Entries under vault/ are committed as one encrypted file (.vault.enc)"
+		assert_output_contains "For all other functionality, call pass directly (see 'pass help')."
+	done
+}
+
 test_passs_main_tag_command_routes_to_add_tag() {
 	add_tag() {
 		printf 'add_tag %s %s\n' "$1" "$2"
