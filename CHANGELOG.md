@@ -1,8 +1,17 @@
+## [0.1.9] - 2026-10-09
+
+### 🚀 Features
+
+- Add secret id handling (#32)
 ## [0.1.8] - 2026-10-09
 
 ### 🚀 Features
 
 - Add vault (#30)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.8 (#31)
 ## [0.1.7] - 2026-06-30
 
 ### 🚀 Features
