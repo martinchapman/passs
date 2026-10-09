@@ -225,8 +225,8 @@ vault_pass() {
 	status=$?
 	trap - INT TERM HUP
 	history="$(vault_history "$snapshot")"
-	[ -z "$history" ] || printf '%s\n\n' "$history" >>"$(vault_dir)/.githistory"
 	remove_path "$history_repository" "$(vault_dir)/.git"
+	[ -z "$history" ] || { printf '%s\n\n' "$history" >>"$(vault_dir)/.githistory" && vault_seal; } || status=$?
 	return $status
 }
 

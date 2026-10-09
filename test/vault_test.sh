@@ -262,6 +262,7 @@ test_vault_pass_pass_commits_appends_history_and_cleans_up() {
 	stub_vault_pass_setup appending
 	printf 'old\n\n' >"$STUB_STORE_DIR/vault/.githistory"
 	stub_recording pass
+	stub_recording vault_seal
 	vault_history() { printf 'new\n'; }
 	register_stub vault_history
 	run vault_pass insert vault/foo.com/bar
@@ -269,21 +270,49 @@ test_vault_pass_pass_commits_appends_history_and_cleans_up() {
 	assertEquals "old
 
 new" "$(cat "$STUB_STORE_DIR/vault/.githistory")"
-	assert_calls "$(printf '%s\n%s\n%s\n%s' \
+	assert_calls "$(printf '%s\n%s\n%s\n%s\n%s' \
 		"vault_git init" \
 		"vault_git add" \
 		"vault_git commit" \
-		"pass insert vault/foo.com/bar")"
+		"pass insert vault/foo.com/bar" \
+		"vault_seal ")"
 	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
 }
 
-test_vault_pass_no_history_leaves_history_file_absent() {
+test_vault_pass_no_history_skips_history_file_and_seal() {
 	stub_vault_pass_setup reading
-	stub_recording pass
-	stub_recording vault_history
+	stub_recording pass vault_history vault_seal
 	run vault_pass show vault/foo.com/bar
 	assert_success
 	assertFalse "expected no history file" "[ -e '$STUB_STORE_DIR/vault/.githistory' ]"
+	case "$STUB_CALLS" in
+	*vault_seal*) fail "expected no seal" ;;
+	esac
+}
+
+test_vault_pass_seal_fails_returns_failure() {
+	stub_vault_pass_setup sealing
+	stub_recording pass
+	stub_failing vault_seal
+	vault_history() { printf 'new\n'; }
+	register_stub vault_history
+	run vault_pass insert vault/foo.com/bar
+	assert_failure
+}
+
+test_vault_pass_link_removed_before_seal() {
+	stub_vault_pass_setup linking
+	stub_recording pass
+	vault_history() { printf 'new\n'; }
+	vault_seal() { append_call "vault_seal link=$(ls -A "$STUB_STORE_DIR/vault" | grep -c '^\.git$')"; }
+	register_stub vault_history
+	register_stub vault_seal
+	touch "$STUB_STORE_DIR/vault/.git"
+	run vault_pass insert vault/foo.com/bar
+	case "$STUB_CALLS" in
+	*"vault_seal link=0"*) : ;;
+	*) fail "expected vault/.git removed before sealing" ;;
+	esac
 }
 
 test_vault_pass_pass_fails_returns_its_status() {
