@@ -50,24 +50,61 @@ test_ensure_meta_file_file_exists_skips_write() {
 		"meta_file_exists $file")"
 }
 
-test_commit_meta_change_git_succeeds_returns_success() {
-	stub_git_success
-	run_with_output commit_meta_change "bar.com/.site.meta.json" "foo"
-	assert_success
-	assert_output ""
+test_store_temp_path_returns_path_inside_git_dir() {
+	run_with_output store_temp_path foo
+	assert_output "$HOME/.password-store/.git/passs-foo"
 }
 
-test_commit_meta_change_git_add_fails_returns_failure() {
-	stub_git_add_failure
-	run_with_output commit_meta_change "bar.com/.site.meta.json" "foo"
+test_ensure_line_line_missing_appends_on_new_line() {
+	file="$SHUNIT_TMPDIR/missing"
+	printf 'foo' >"$file"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "foo
+bar" "$(cat "$file")"
+}
+
+test_ensure_line_line_present_leaves_file_unchanged() {
+	file="$SHUNIT_TMPDIR/present"
+	printf 'bar\nfoo\n' >"$file"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "bar
+foo" "$(cat "$file")"
+}
+
+test_ensure_line_file_absent_creates_file() {
+	file="$SHUNIT_TMPDIR/absent"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "bar" "$(cat "$file")"
+}
+
+test_commit_store_change_add_succeeds_commits_only_given_paths() {
+	store_git() { append_call "store_git $*"; }
+	register_stub store_git
+	run commit_store_change "foo" bar.com/.site.meta.json baz.com/.site.meta.json
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"store_git add -- bar.com/.site.meta.json baz.com/.site.meta.json" \
+		"store_git commit -m foo -- bar.com/.site.meta.json baz.com/.site.meta.json")"
+}
+
+test_commit_store_change_add_fails_skips_commit() {
+	store_git() {
+		append_call "store_git $*"
+		return 1
+	}
+	register_stub store_git
+	run commit_store_change "foo" bar.com/.site.meta.json
 	assert_failure
-	assert_output ""
+	assert_calls "store_git add -- bar.com/.site.meta.json"
 }
 
 test_add_tag_tag_is_new_appends_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_entry_change_success
 	meta_has_tag() { return 1; }
 	append_meta_tag() {
 		append_call "append_meta_tag $1 $2"
@@ -79,7 +116,7 @@ test_add_tag_tag_is_new_appends_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"append_meta_tag $file foo" \
-		"commit_meta_change $file Add tag 'foo' for bar.com")"
+		"commit_entry_change Add tag 'foo' for bar.com $file")"
 }
 
 test_add_tag_tag_exists_reports_already_exists() {
@@ -95,7 +132,7 @@ test_add_tag_tag_exists_reports_already_exists() {
 test_add_tag_commit_fails_returns_failure() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_failure
+	stub_commit_entry_change_failure
 	meta_has_tag() { return 1; }
 	append_meta_tag() {
 		append_call "append_meta_tag $1 $2"
@@ -107,7 +144,7 @@ test_add_tag_commit_fails_returns_failure() {
 	assert_failure
 	assert_calls "$(printf '%s\n%s' \
 		"append_meta_tag $file foo" \
-		"commit_meta_change $file Add tag 'foo' for bar.com")"
+		"commit_entry_change Add tag 'foo' for bar.com $file")"
 }
 
 test_add_description_description_matches_reports_already_set() {
@@ -123,7 +160,7 @@ test_add_description_description_matches_reports_already_set() {
 test_add_description_description_missing_adds_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_entry_change_success
 	meta_description() { printf '\n'; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -135,13 +172,13 @@ test_add_description_description_missing_adds_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Add description for bar.com")"
+		"commit_entry_change Add description for bar.com $file")"
 }
 
 test_add_description_description_differs_updates_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_entry_change_success
 	meta_description() { printf '%s\n' "foo"; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -153,13 +190,13 @@ test_add_description_description_differs_updates_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Update description for bar.com")"
+		"commit_entry_change Update description for bar.com $file")"
 }
 
 test_add_description_commit_fails_returns_failure() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_failure
+	stub_commit_entry_change_failure
 	meta_description() { printf '%s\n' "foo"; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -171,7 +208,7 @@ test_add_description_commit_fails_returns_failure() {
 	assert_failure
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Update description for bar.com")"
+		"commit_entry_change Update description for bar.com $file")"
 }
 
 test_get_description_description_set_prints_description() {
@@ -241,18 +278,16 @@ test_list_by_tag_no_entries_match_produces_no_output() {
 }
 
 test_lint_subdomain_folder_found_reports_error_and_remediation() {
-	password_store_dirs() {
+	top_level_dirs() {
 		printf '%s\n' \
-			"$HOME/.password-store" \
 			"$HOME/.password-store/foo.bar.baz.com" \
 			"$HOME/.password-store/foo.bar.com" \
 			"$HOME/.password-store/foo.ac.uk" \
 			"$HOME/.password-store/bar.co.uk" \
-			"$HOME/.password-store/192.168.0.1" \
-			"$HOME/.password-store/bar.com/baz"
+			"$HOME/.password-store/192.168.0.1"
 	}
 	top_level_gpg_files() { return 0; }
-	register_stub password_store_dirs
+	register_stub top_level_dirs
 	register_stub top_level_gpg_files
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
@@ -261,13 +296,12 @@ Top-level folders should be registrable domains. Put subdomains underneath the p
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
-	password_store_dirs() {
+	top_level_dirs() {
 		printf '%s\n' \
-			"$HOME/.password-store" \
 			"$HOME/.password-store/foo.bar.com" \
-			"$HOME/.password-store/bar.com/baz"
+			"$HOME/.password-store/bar.com"
 	}
-	register_stub password_store_dirs
+	register_stub top_level_dirs
 	run_with_output lint_subdomain_folder_name_violations
 	assert_output "$(printf 'foo.bar.com\tfoo.bar.com')"
 }
@@ -285,9 +319,9 @@ test_lint_subdomain_folder_remediation_reports_overall_advice() {
 }
 
 test_lint_no_violations_found_produces_no_output() {
-	password_store_dirs() { printf '%s\n' "$HOME/.password-store"; }
+	top_level_dirs() { return 0; }
 	top_level_gpg_files() { return 0; }
-	register_stub password_store_dirs
+	register_stub top_level_dirs
 	register_stub top_level_gpg_files
 	run_with_output lint
 	assert_success
@@ -332,12 +366,8 @@ gpg_at_top_level"
 }
 
 test_lint_rule_report_reports_rule_advice() {
-	password_store_dirs() {
-		printf '%s\n' \
-			"$HOME/.password-store" \
-			"$HOME/.password-store/foo.bar.com"
-	}
-	register_stub password_store_dirs
+	top_level_dirs() { printf '%s\n' "$HOME/.password-store/foo.bar.com"; }
+	register_stub top_level_dirs
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
@@ -370,6 +400,82 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
 Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+}
+
+test_top_level_gpg_files_vault_present_searches_store_and_vault() {
+	stub_store_in_tmpdir rooted
+	touch "$STUB_STORE_DIR/foo.gpg" "$STUB_STORE_DIR/vault/bar.gpg"
+	mkdir -p "$STUB_STORE_DIR/vault/baz.com" && touch "$STUB_STORE_DIR/vault/baz.com/qux.gpg"
+	run_with_output top_level_gpg_files
+	assert_success
+	assert_output "$(printf '%s\n%s' "$STUB_STORE_DIR/foo.gpg" "$STUB_STORE_DIR/vault/bar.gpg")"
+}
+
+test_top_level_dirs_vault_present_lists_children_of_each_root() {
+	stub_store_in_tmpdir listing
+	mkdir -p "$STUB_STORE_DIR/foo.com/bar" "$STUB_STORE_DIR/vault/baz.com/qux"
+	run_with_output top_level_dirs
+	assert_success
+	assertEquals "$(printf '%s\n' \
+		"$STUB_STORE_DIR/.git" \
+		"$STUB_STORE_DIR/foo.com" \
+		"$STUB_STORE_DIR/vault" \
+		"$STUB_STORE_DIR/vault/baz.com" | sort)" "$(printf '%s\n' "$TEST_OUTPUT" | sort)"
+}
+
+test_lint_roots_vault_absent_lists_store_only() {
+	stub_store_in_tmpdir unrooted
+	rmdir "$STUB_STORE_DIR/vault"
+	run_with_output lint_roots
+	assert_output "$STUB_STORE_DIR"
+}
+
+test_lint_subdomain_folder_vault_folder_emits_record() {
+	top_level_dirs() {
+		printf '%s\n' \
+			"$HOME/.password-store/vault" \
+			"$HOME/.password-store/vault/foo.bar.com"
+	}
+	register_stub top_level_dirs
+	run_with_output lint_subdomain_folder_name_violations
+	assert_output "$(printf 'foo.bar.com\tvault/foo.bar.com')"
+}
+
+test_lint_gpg_at_top_level_message_vault_file_shows_path() {
+	run_with_output lint_gpg_at_top_level_message "$(printf 'foo.gpg\tvault/foo.gpg')"
+	assert_output "error: file 'vault/foo.gpg' is a .gpg file at the top level"
+}
+
+test_lint_gpg_at_top_level_fix_vault_file_moves_within_vault() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tvault/foo.gpg')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/vault/foo" \
+		"move_file $TEST_ROOT/store/vault/foo.gpg $TEST_ROOT/store/vault/foo/password.gpg")"
+}
+
+test_lint_subdomain_folder_name_fix_vault_folder_nests_within_vault() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tvault/foo.bar.com')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"make_dir $TEST_ROOT/store/vault/bar.com" \
+		"move_file $TEST_ROOT/store/vault/foo.bar.com $TEST_ROOT/store/vault/bar.com/foo")"
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
@@ -510,6 +616,16 @@ test_passs_main_version_flag_prints_version() {
 	run_with_output passs_main version
 	assert_success
 	assert_output "pass wrapper v$VERSION"
+}
+
+test_passs_main_help_flags_print_help() {
+	for flag in help -h --help; do
+		run_with_output passs_main "$flag"
+		assert_success
+		assert_output_contains "Usage: passs <command> [args]"
+		assert_output_contains "Entries under vault/ are committed as one encrypted file (.vault.enc)"
+		assert_output_contains "For all other functionality, call pass directly (see 'pass help')."
+	done
 }
 
 test_passs_main_tag_command_routes_to_add_tag() {

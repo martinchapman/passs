@@ -2,10 +2,13 @@
 VERSION="0.1.7"
 
 password_store_dir() { echo "$HOME/.password-store"; }
-meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
+store_temp_path() { echo "$(password_store_dir)/.git/passs-$1"; }
+store_git() { git -C "$(password_store_dir)" "$@"; }
+meta_file() { echo "$(password_store_dir)/$1/.site.meta.json"; }
 parent_dir() { dirname "$1"; }
 make_dir() { mkdir -p "$1"; }
 move_file() { mv "$1" "$2"; }
+remove_path() { rm -rf "$@"; }
 path_exists() { [ -e "$1" ]; }
 meta_file_exists() { [ -f "$1" ]; }
 write_default_meta_file() { printf '{"tags":[],"description":""}\n' >"$1"; }
@@ -17,8 +20,15 @@ ensure_meta_file() {
 	echo "$file"
 }
 
-commit_meta_change() {
-	git -C "$HOME/.password-store" add "$1" && git -C "$HOME/.password-store" commit -m "$2"
+ensure_line() {
+	[ -s "$1" ] && [ -n "$(tail -c 1 "$1")" ] && echo >>"$1"
+	grep -qxF "$2" "$1" 2>/dev/null || echo "$2" >>"$1"
+}
+
+commit_store_change() {
+	message="$1"
+	shift
+	store_git add -- "$@" && store_git commit -m "$message" -- "$@"
 }
 
 meta_has_tag() { jq -e --arg t "$2" '.tags | index($t)' "$1" >/dev/null 2>&1; }
@@ -28,7 +38,7 @@ add_tag() {
 	file="$(ensure_meta_file "$1")"
 	meta_has_tag "$file" "$2" || {
 		append_meta_tag "$file" "$2"
-		commit_meta_change "$file" "Add tag '$2' for $1"
+		commit_entry_change "Add tag '$2' for $1" "$file"
 		return
 	}
 	echo "Tag '$2' already exists in $file"
@@ -46,7 +56,7 @@ add_description() {
 	}
 	set_meta_description "$file" "$2"
 	[ -n "$current_description" ] && verb="Update" || verb="Add"
-	commit_meta_change "$file" "$verb description for $1"
+	commit_entry_change "$verb description for $1" "$file"
 }
 
 get_description() {
@@ -67,11 +77,25 @@ list_by_tag() {
 	done
 }
 
-password_store_dirs() { find "$(password_store_dir)" -type d; }
-top_level_gpg_files() { find "$(password_store_dir)" -maxdepth 1 -name "*.gpg" -type f; }
+lint_roots() {
+	password_store_dir
+	[ ! -d "$(vault_dir)" ] || vault_dir
+}
+
+top_level_gpg_files() {
+	lint_roots | while read -r root; do
+		find "$root" -maxdepth 1 -name "*.gpg" -type f
+	done
+}
+
+top_level_dirs() {
+	lint_roots | while read -r root; do
+		find "$root" -mindepth 1 -maxdepth 1 -type d
+	done
+}
+
 path_basename() { basename "$1"; }
 path_relative_to_store() { echo "$1" | sed "s|$(password_store_dir)/||"; }
-is_top_level_path() { echo "$1" | grep -qv '/'; }
 looks_like_subdomain() {
 	echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+' || return 1
 	! echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]{1,3}\.[a-zA-Z]{2}$'
@@ -140,6 +164,171 @@ lint() {
 	done
 }
 
+###############################################################################
+# Vault
+###############################################################################
+
+vault_name() { echo vault; }
+vault_blob_name() { echo ".$(vault_name).enc"; }
+vault_dir() { echo "$(password_store_dir)/$(vault_name)"; }
+vault_blob_path() { echo "$(password_store_dir)/$(vault_blob_name)"; }
+
+names_vault_entry() {
+	vault_prefix="$(vault_name)"
+	for arg in "$@"; do
+		case "$arg" in
+		"$vault_prefix" | "$vault_prefix"/*) return 0 ;;
+		esac
+	done
+	return 1
+}
+
+relocates_vault() {
+	case "$1" in
+	mv | cp | rename | copy) shift ;;
+	*) return 1 ;;
+	esac
+	vault_prefix="$(vault_name)"
+	for arg in "$@"; do
+		case "$arg" in
+		-*) ;;
+		"$vault_prefix" | "$vault_prefix"/) return 0 ;;
+		*) return 1 ;;
+		esac
+	done
+	return 1
+}
+
+ensure_vault_ignored() { ensure_line "$(password_store_dir)/.gitignore" "/$(vault_name)/"; }
+
+vault_tar() { tar -C "$1" --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - .; }
+
+vault_encrypt() {
+	set --
+	while IFS= read -r id; do
+		[ -n "$id" ] && set -- "$@" --hidden-recipient "$id"
+	done <"$(password_store_dir)/.gpg-id"
+	gpg --quiet --yes --encrypt "$@"
+}
+
+vault_decrypt() { gpg --quiet --yes --decrypt; }
+
+vault_committed_tar() {
+	! store_git cat-file -e "HEAD:$(vault_blob_name)" 2>/dev/null ||
+		store_git cat-file blob "HEAD:$(vault_blob_name)" | vault_decrypt
+}
+
+vault_seal() {
+	[ -d "$(vault_dir)" ] || return 0
+	current="$(store_temp_path vault-current.tar)"
+	committed="$(store_temp_path vault-committed.tar)"
+	ensure_vault_ignored &&
+		vault_tar "$(vault_dir)" >"$current" &&
+		vault_committed_tar >"$committed" &&
+		{ cmp -s "$current" "$committed" ||
+			{ vault_encrypt <"$current" >"$(vault_blob_path)" &&
+				commit_store_change "Update vault" .gitignore "$(vault_blob_name)"; }; }
+	status=$?
+	remove_path "$current" "$committed"
+	return $status
+}
+
+vault_git() { git -C "$(vault_dir)" "$@"; }
+
+format_history_entry() {
+	printf 'commit refs/heads/main\nauthor %s\ncommitter %s\ndata %s\n%s\n' \
+		"$1" "$2" "$(($(printf '%s\n' "$3" | wc -c)))" "$3"
+}
+
+append_vault_history() { printf '%s\n\n' "$1" >>"$(vault_dir)/.githistory"; }
+
+vault_history() {
+	vault_git rev-list --reverse "$1..HEAD" | while IFS= read -r commit; do
+		format_history_entry \
+			"$(vault_git show -s --date=raw --format='%an <%ae> %ad' "$commit")" \
+			"$(vault_git show -s --date=raw --format='%cn <%ce> %cd' "$commit")" \
+			"$(vault_git show -s --format=%B "$commit")"
+		echo
+	done
+}
+
+commit_entry_change() {
+	case "$2" in
+	"$(vault_dir)"/*)
+		append_vault_history "$(format_history_entry \
+			"$(store_git var GIT_AUTHOR_IDENT)" "$(store_git var GIT_COMMITTER_IDENT)" "$1")" &&
+			vault_seal
+		;;
+	*) commit_store_change "$1" "$2" ;;
+	esac
+}
+
+vault_remove() {
+	path_exists "$(vault_blob_path)" || return 0
+	remove_path "$(vault_blob_path)" && commit_store_change "Remove vault" "$(vault_blob_name)"
+}
+
+vault_pass() {
+	history_repository="$(mktemp -d "$(store_temp_path vault-history-XXXXXX)")" &&
+		make_dir "$(vault_dir)" &&
+		vault_git init -q --separate-git-dir="$history_repository" &&
+		vault_git add -A &&
+		vault_git commit -q --allow-empty -m snapshot &&
+		snapshot="$(vault_git rev-parse HEAD)" || {
+		remove_path "$history_repository" "$(vault_dir)/.git"
+		return 1
+	}
+	trap : INT TERM HUP
+	pass "$@"
+	status=$?
+	trap - INT TERM HUP
+	[ -d "$(vault_dir)" ] || {
+		remove_path "$history_repository"
+		vault_remove || return 1
+		return $status
+	}
+	history="$(vault_history "$snapshot")"
+	remove_path "$history_repository" "$(vault_dir)/.git"
+	[ -z "$history" ] || { append_vault_history "$history" && vault_seal; } || status=$?
+	return $status
+}
+
+vault_unseal() {
+	path_exists "$(vault_blob_path)" || {
+		remove_path "$(vault_dir)"
+		return
+	}
+	temp_dir="$(mktemp -d "$(store_temp_path vault-XXXXXX)")" &&
+		vault_decrypt <"$(vault_blob_path)" | tar -C "$temp_dir" -xf - &&
+		remove_path "$(vault_dir)" &&
+		move_file "$temp_dir" "$(vault_dir)"
+}
+
+passs_help() {
+	vault="$(vault_name)"
+	cat <<EOF
+Usage: passs <command> [args]
+
+Commands:
+  tag pass-name <tag>               Add a tag to an entry and commit it
+  tag list <tag>                    List entries with a tag
+  description pass-name <text>      Set an entry's description and commit it
+  description get pass-name         Print an entry's description
+  lint [--fix]                      Report store structure problems, and fix them with --fix
+  git push|pull [args]              Run pass git, encrypting and decrypting the vault
+  version, --version                Print the version
+  help, -h, --help                  Show this help
+
+Vault:
+  Entries under $vault/ are committed as one encrypted file ($(vault_blob_name)), so their names never reach the remote.
+  Manage them with passs, for example 'passs insert $vault/foo.com/bar', so each change is committed.
+  passs git pull decrypts the vault after pulling.
+  The commits pass would make for vault entries are kept in $vault/.githistory as a git fast-import stream.
+
+For all other functionality, call pass directly (see 'pass help').
+EOF
+}
+
 passs_main() {
 	case "$1" in
 	tag)
@@ -187,8 +376,25 @@ passs_main() {
 		*) lint ;;
 		esac
 		;;
+	git)
+		case "$2" in
+		push) vault_seal && pass "$@" ;;
+		pull) vault_seal && pass "$@" && vault_unseal ;;
+		*) pass "$@" ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
-	*) pass "$@" ;;
+	help | -h | --help) passs_help ;;
+	*)
+		if relocates_vault "$@"; then
+			echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
+			return 1
+		elif names_vault_entry "$@"; then
+			ensure_vault_ignored && vault_pass "$@"
+		else
+			pass "$@"
+		fi
+		;;
 	esac
 }
 
@@ -205,8 +411,8 @@ lint_gpg_at_top_level_violations() {
 }
 
 lint_gpg_at_top_level_message() {
-	basename="$(get_lint_violation_field "$1" 1)"
-	echo "error: file '$basename' is a .gpg file at the top level"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: file '$path' is a .gpg file at the top level"
 }
 
 lint_gpg_at_top_level_remediation() {
@@ -214,17 +420,17 @@ lint_gpg_at_top_level_remediation() {
 }
 
 lint_gpg_at_top_level_fix() {
-	name="$(get_lint_violation_field "$1" 1)"
-	folder="${name%.gpg}"
+	path="$(get_lint_violation_field "$1" 2)"
+	folder="${path%.gpg}"
 	store_dir="$(password_store_dir)"
 	target="$store_dir/$folder/password.gpg"
 	path_exists "$target" && {
-		echo "error: cannot fix '$name', '$folder/password.gpg' already exists"
+		echo "error: cannot fix '$path', '$folder/password.gpg' already exists"
 		return
 	}
 	make_dir "$store_dir/$folder" &&
-		move_file "$store_dir/$name" "$target" &&
-		echo "fixed: moved '$name' to '$folder/password.gpg'"
+		move_file "$store_dir/$path" "$target" &&
+		echo "fixed: moved '$path' to '$folder/password.gpg'"
 }
 
 ###############################################################################
@@ -232,11 +438,10 @@ lint_gpg_at_top_level_fix() {
 ###############################################################################
 
 lint_subdomain_folder_name_violations() {
-	password_store_dirs | while read -r dir; do
+	top_level_dirs | while read -r dir; do
 		basename="$(path_basename "$dir")"
-		[ "$basename" = ".password-store" ] && continue
 		relative_path="$(path_relative_to_store "$dir")"
-		is_top_level_path "$relative_path" && looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && print_lint_violation "$basename" "$relative_path"
+		looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && print_lint_violation "$basename" "$relative_path"
 	done
 }
 
@@ -267,16 +472,17 @@ subdomain_to_nested_path() {
 
 lint_subdomain_folder_name_fix() {
 	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
 	store_dir="$(password_store_dir)"
-	target_relative="$(subdomain_to_nested_path "$name")"
+	target_relative="${path%"$name"}$(subdomain_to_nested_path "$name")"
 	target="$store_dir/$target_relative"
 	path_exists "$target" && {
-		echo "error: cannot fix '$name', '$target_relative' already exists"
+		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
 	}
 	make_dir "$(parent_dir "$target")" &&
-		move_file "$store_dir/$name" "$target" &&
-		echo "fixed: moved '$name' to '$target_relative'"
+		move_file "$store_dir/$path" "$target" &&
+		echo "fixed: moved '$path' to '$target_relative'"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"

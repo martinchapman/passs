@@ -65,35 +65,20 @@ stub_ensure_meta_file() {
 	register_stub ensure_meta_file
 }
 
-stub_commit_meta_change_success() {
-	commit_meta_change() {
-		append_call "commit_meta_change $1 $2"
+stub_commit_entry_change_success() {
+	commit_entry_change() {
+		append_call "commit_entry_change $*"
 		return 0
 	}
-	register_stub commit_meta_change
+	register_stub commit_entry_change
 }
 
-stub_commit_meta_change_failure() {
-	commit_meta_change() {
-		append_call "commit_meta_change $1 $2"
+stub_commit_entry_change_failure() {
+	commit_entry_change() {
+		append_call "commit_entry_change $*"
 		return 1
 	}
-	register_stub commit_meta_change
-}
-
-stub_git_success() {
-	git() { return 0; }
-	register_stub git
-}
-
-stub_git_add_failure() {
-	git() {
-		case " $* " in
-		*" add "*) return 1 ;;
-		*) return 0 ;;
-		esac
-	}
-	register_stub git
+	register_stub commit_entry_change
 }
 
 stub_download_success() {
@@ -148,6 +133,27 @@ stub_install_file_ops_success() {
 	register_stub set_file_mode
 	register_stub move_file
 	register_stub remove_dir
+}
+
+stub_recording() {
+	for function_name in "$@"; do
+		eval "$function_name() { append_call \"$function_name \$*\"; }"
+		register_stub "$function_name"
+	done
+}
+
+stub_failing() {
+	for function_name in "$@"; do
+		eval "$function_name() { append_call \"$function_name \$*\"; return 1; }"
+		register_stub "$function_name"
+	done
+}
+
+stub_store_in_tmpdir() {
+	STUB_STORE_DIR="$SHUNIT_TMPDIR/$1"
+	password_store_dir() { printf '%s\n' "$STUB_STORE_DIR"; }
+	register_stub password_store_dir
+	mkdir -p "$STUB_STORE_DIR/.git" "$STUB_STORE_DIR/vault"
 }
 
 reset_stubs() {
