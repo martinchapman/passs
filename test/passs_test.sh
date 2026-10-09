@@ -287,8 +287,10 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 			"$HOME/.password-store/192.168.0.1"
 	}
 	top_level_gpg_files() { return 0; }
+	web_entries() { return 0; }
 	register_stub top_level_dirs
 	register_stub top_level_gpg_files
+	register_stub web_entries
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
@@ -321,8 +323,10 @@ test_lint_subdomain_folder_remediation_reports_overall_advice() {
 test_lint_no_violations_found_produces_no_output() {
 	top_level_dirs() { return 0; }
 	top_level_gpg_files() { return 0; }
+	web_entries() { return 0; }
 	register_stub top_level_dirs
 	register_stub top_level_gpg_files
+	register_stub web_entries
 	run_with_output lint
 	assert_success
 	assert_output ""
@@ -362,7 +366,9 @@ test_lint_rules_lists_registered_rule_ids() {
 	run_with_output lint_rules
 	assert_success
 	assert_output "subdomain_folder_name
-gpg_at_top_level"
+gpg_at_top_level
+redundant_address
+leaked_id"
 }
 
 test_lint_rule_report_reports_rule_advice() {
@@ -610,6 +616,241 @@ test_lint_fix_routes_violations_to_fix_function() {
 	assert_output "$(printf '%s\n%s' \
 		"lint_foo_fix first" \
 		"lint_foo_fix second")"
+}
+
+test_user_full_name_returns_first_gecos_field() {
+	getent() { printf '%s\n' 'foo:x:1000:1000:Foo Bar,1,2,3:/home/foo:/bin/sh'; }
+	register_stub getent
+	run_with_output user_full_name
+	assert_success
+	assert_output "Foo Bar"
+}
+
+test_web_entries_lists_entries_under_web_address_folders_only() {
+	stub_store_in_tmpdir web
+	mkdir -p "$STUB_STORE_DIR/foo.com/bar" "$STUB_STORE_DIR/codes" "$STUB_STORE_DIR/vault/baz.com"
+	touch "$STUB_STORE_DIR/foo.com/qux.gpg" "$STUB_STORE_DIR/foo.com/bar/baz.gpg" \
+		"$STUB_STORE_DIR/codes/qux.gpg" "$STUB_STORE_DIR/qux.com.gpg" \
+		"$STUB_STORE_DIR/vault/baz.com/qux.gpg" "$STUB_STORE_DIR/.git/qux.gpg"
+	TEST_OUTPUT="$(web_entries | sort)"
+	assert_output "foo.com/bar/baz
+foo.com/qux"
+}
+
+test_looks_like_id_unrecognised_name_returns_success() {
+	run looks_like_id x7Fq2 "Foo Bar"
+	assert_success
+}
+
+test_looks_like_id_email_returns_failure() {
+	run looks_like_id qux@baz.com "Foo Bar"
+	assert_failure
+}
+
+test_looks_like_id_hidden_credentials_returns_failure() {
+	run looks_like_id hidden-credentials-12 "Foo Bar"
+	assert_failure
+}
+
+test_looks_like_id_generic_word_in_any_case_returns_failure() {
+	run looks_like_id Administrator "Foo Bar"
+	assert_failure
+}
+
+test_looks_like_id_contains_name_part_in_any_case_returns_failure() {
+	run looks_like_id qfoobar "Foo Bar"
+	assert_failure
+}
+
+test_looks_like_id_contains_shortened_name_returns_success() {
+	run looks_like_id BA1234 "Foo Bar"
+	assert_success
+}
+
+test_looks_like_id_user_name_empty_returns_success() {
+	run looks_like_id x7Fq2 ""
+	assert_success
+}
+
+test_lint_leaked_id_violations_emit_records_for_ids_only() {
+	web_entries() { printf '%s\n' foo.com/x7Fq2 foo.com/bar/foo baz.com/qux@baz.com; }
+	user_full_name() { echo "Foo Bar"; }
+	register_stub web_entries
+	register_stub user_full_name
+	run_with_output lint_leaked_id_violations
+	assert_output "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
+}
+
+test_lint_leaked_id_message_formats_record() {
+	run_with_output lint_leaked_id_message "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
+	assert_success
+	assert_output "error: entry name 'x7Fq2' appears to be an id at foo.com/x7Fq2"
+}
+
+test_lint_leaked_id_remediation_reports_overall_advice() {
+	run_with_output lint_leaked_id_remediation
+	assert_success
+	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
+}
+
+test_lint_leaked_id_fix_write_succeeds_writes_new_entry_then_removes_old() {
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
+	register_stub next_secret_entry
+	stub_recording write_secret_entry pass_dispatch
+	run lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/bar/x7Fq2')"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"write_secret_entry foo.com/bar/x7Fq2 foo.com/bar/hidden-credentials-2 x7Fq2" \
+		"pass_dispatch rm -f foo.com/bar/x7Fq2")"
+}
+
+test_lint_leaked_id_fix_write_succeeds_reports_change() {
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
+	write_secret_entry() { :; }
+	pass_dispatch() { :; }
+	register_stub next_secret_entry
+	register_stub write_secret_entry
+	register_stub pass_dispatch
+	run_with_output lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
+	assert_success
+	assert_output "fixed: moved 'foo.com/x7Fq2' to 'foo.com/hidden-credentials-2' with its id"
+}
+
+test_lint_leaked_id_fix_write_fails_keeps_old_entry() {
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
+	register_stub next_secret_entry
+	stub_failing write_secret_entry
+	stub_recording pass_dispatch
+	run lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
+	assert_failure
+	assert_calls "write_secret_entry foo.com/x7Fq2 foo.com/hidden-credentials-2 x7Fq2"
+}
+
+test_repeated_site_address_address_in_name_prints_address() {
+	run_with_output repeated_site_address foo.com/bar.foo.com
+	assert_output "foo.com"
+}
+
+test_repeated_site_address_subdomain_folder_prints_longest_address() {
+	run_with_output repeated_site_address foo.com/baz/bar@baz.foo.com
+	assert_output "baz.foo.com"
+}
+
+test_repeated_site_address_no_address_in_name_prints_nothing() {
+	run_with_output repeated_site_address foo.com/bar@foo.net
+	assert_output ""
+}
+
+test_has_redundant_address_address_in_name_returns_success() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/bar.foo.com
+	assert_success
+}
+
+test_has_redundant_address_email_address_returns_failure() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/bar@foo.com
+	assert_failure
+}
+
+test_has_redundant_address_name_is_label_in_any_case_returns_success() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/Foo
+	assert_success
+}
+
+test_has_redundant_address_label_inside_name_returns_failure() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/barfoo
+	assert_failure
+}
+
+test_redundant_address_fixed_name_address_at_end_strips_address_and_separator() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/bar.foo.com
+	assert_output "bar"
+}
+
+test_redundant_address_fixed_name_address_in_middle_joins_remainder() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/bar.foo.com-baz
+	assert_output "barbaz"
+}
+
+test_redundant_address_fixed_name_whole_name_is_address_returns_user() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/foo.com
+	assert_output "user"
+}
+
+test_redundant_address_fixed_name_no_address_returns_user() {
+	repeated_site_address() { :; }
+	register_stub repeated_site_address
+	run_with_output redundant_address_fixed_name foo.com/foo
+	assert_output "user"
+}
+
+test_lint_redundant_address_violations_emit_records_for_repeats_only() {
+	web_entries() { printf '%s\n' foo.com/bar.foo.com foo.com/baz; }
+	register_stub web_entries
+	run_with_output lint_redundant_address_violations
+	assert_output "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+}
+
+test_lint_redundant_address_message_formats_record() {
+	run_with_output lint_redundant_address_message "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+	assert_success
+	assert_output "error: entry name 'bar.foo.com' repeats its site address at foo.com/bar.foo.com"
+}
+
+test_lint_redundant_address_remediation_reports_overall_advice() {
+	run_with_output lint_redundant_address_remediation
+	assert_success
+	assert_output "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+}
+
+test_lint_redundant_address_fix_target_absent_renames_entry() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
+	assert_success
+	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+}
+
+test_lint_redundant_address_fix_target_absent_reports_change() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	move_file() { return 0; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
+	assert_success
+	assert_output "fixed: moved 'foo.com/foo.com' to 'foo.com/user'"
+}
+
+test_lint_redundant_address_fix_target_exists_refuses_to_overwrite() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 0; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
+	assert_success
+	assert_output "error: cannot fix 'foo.com/foo.com', 'foo.com/user' already exists"
+	assert_calls ""
 }
 
 test_passs_main_version_flag_prints_version() {

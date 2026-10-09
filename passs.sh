@@ -108,7 +108,9 @@ get_lint_violation_field() { printf '%s\n' "$1" | cut -f "$2"; }
 lint_rules() {
 	printf '%s\n' \
 		subdomain_folder_name \
-		gpg_at_top_level
+		gpg_at_top_level \
+		redundant_address \
+		leaked_id
 }
 
 lint_rule_supports() {
@@ -315,6 +317,8 @@ Commands:
   description pass-name <text>      Set an entry's description and commit it
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
+  generate|insert --secret pass-folder/id [pass args]
+                                    Run pass generate or insert for pass-folder/hidden-credentials-N, then add 'id: <id>' after the password
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -383,19 +387,31 @@ passs_main() {
 		*) pass "$@" ;;
 		esac
 		;;
+	generate | insert)
+		case "$2" in
+		--secret)
+			pass_command="$1"
+			shift 2
+			add_secret_entry "$pass_command" "$@"
+			;;
+		*) pass_dispatch "$@" ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
 	help | -h | --help) passs_help ;;
-	*)
-		if relocates_vault "$@"; then
-			echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
-			return 1
-		elif names_vault_entry "$@"; then
-			ensure_vault_ignored && vault_pass "$@"
-		else
-			pass "$@"
-		fi
-		;;
+	*) pass_dispatch "$@" ;;
 	esac
+}
+
+pass_dispatch() {
+	if relocates_vault "$@"; then
+		echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
+		return 1
+	elif names_vault_entry "$@"; then
+		ensure_vault_ignored && vault_pass "$@"
+	else
+		pass "$@"
+	fi
 }
 
 ###############################################################################
@@ -483,6 +499,160 @@ lint_subdomain_folder_name_fix() {
 	make_dir "$(parent_dir "$target")" &&
 		move_file "$store_dir/$path" "$target" &&
 		echo "fixed: moved '$path' to '$target_relative'"
+}
+
+###############################################################################
+# Lint rule: leaked_id
+###############################################################################
+
+user_full_name() { getent passwd "$USER" | cut -d: -f5 | cut -d, -f1; }
+
+generic_account_words() {
+	printf '%s\n' access account admin administrator api app backup codes config demo dev developer \
+		email key login memorable other password phone pin root secret service ssh temp test token \
+		user username vpn
+}
+
+web_entries() {
+	store_dir="$(password_store_dir)"
+	find "$store_dir" -path "$store_dir/.git" -prune -o -path "$(vault_dir)" -prune -o -name '*.gpg' -type f -print |
+		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E '^[^/]*\.[^/]*/'
+}
+
+looks_like_id() {
+	case "$1" in
+	*@* | hidden-credentials-[0-9]*) return 1 ;;
+	esac
+	generic_account_words | grep -qixF "$1" && return 1
+	for part in $2; do
+		printf '%s\n' "$1" | grep -qiF "$part" && return 1
+	done
+	return 0
+}
+
+lint_leaked_id_violations() {
+	user_name="$(user_full_name)"
+	web_entries | while read -r relative_path; do
+		looks_like_id "${relative_path##*/}" "$user_name" &&
+			print_lint_violation "${relative_path##*/}" "$relative_path"
+	done
+}
+
+lint_leaked_id_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: entry name '$name' appears to be an id at $path"
+}
+
+lint_leaked_id_remediation() {
+	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
+}
+
+lint_leaked_id_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	target="$(next_secret_entry "$(parent_dir "$path")")"
+	write_secret_entry "$path" "$target" "$name" &&
+		pass_dispatch rm -f "$path" >/dev/null &&
+		echo "fixed: moved '$path' to '$target' with its id"
+}
+
+###############################################################################
+# Lint rule: redundant_address
+###############################################################################
+
+repeated_site_address() {
+	host=
+	match=
+	IFS=/
+	for folder in ${1%/*}; do
+		host="$folder${host:+.$host}"
+		case "${1##*/}" in *"$host"*) match="$host" ;; esac
+	done
+	unset IFS
+	echo "$match"
+}
+
+has_redundant_address() {
+	case "${1##*/}" in *@*) return 1 ;; esac
+	[ -n "$(repeated_site_address "$1")" ] ||
+		[ "$(printf '%s' "${1##*/}" | tr '[:upper:]' '[:lower:]')" = "${1%%.*}" ]
+}
+
+redundant_address_fixed_name() {
+	address="$(repeated_site_address "$1")"
+	[ -n "$address" ] || {
+		echo user
+		return
+	}
+	name="${1##*/}"
+	before="${name%%"$address"*}"
+	after="${name#*"$address"}"
+	name="${before%[._-]}${after#[._-]}"
+	echo "${name:-user}"
+}
+
+lint_redundant_address_violations() {
+	web_entries | while read -r relative_path; do
+		has_redundant_address "$relative_path" &&
+			print_lint_violation "${relative_path##*/}" "$relative_path"
+	done
+}
+
+lint_redundant_address_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: entry name '$name' repeats its site address at $path"
+}
+
+lint_redundant_address_remediation() {
+	echo "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+}
+
+lint_redundant_address_fix() {
+	path="$(get_lint_violation_field "$1" 2)"
+	store_dir="$(password_store_dir)"
+	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$path")"
+	path_exists "$store_dir/$target_relative.gpg" && {
+		echo "error: cannot fix '$path', '$target_relative' already exists"
+		return
+	}
+	move_file "$store_dir/$path.gpg" "$store_dir/$target_relative.gpg" &&
+		echo "fixed: moved '$path' to '$target_relative'"
+}
+
+###############################################################################
+# Secret generation
+###############################################################################
+
+next_secret_entry() {
+	index=1
+	while path_exists "$(password_store_dir)/$1/hidden-credentials-$index.gpg"; do
+		index=$((index + 1))
+	done
+	echo "$1/hidden-credentials-$index"
+}
+
+write_secret_entry() {
+	content="$(pass show "$1")" || return
+	password="$(printf '%s\n' "$content" | head -n 1)"
+	printf '%s\nid: %s%s\n' "$password" "$3" "${content#"$password"}" |
+		pass_dispatch insert -m -f "$2" >/dev/null
+}
+
+add_secret_entry() {
+	case "$2" in
+	[!-/]*/*[!/]) ;;
+	*)
+		echo "Usage: passs $1 --secret pass-folder/id [pass $1 args]"
+		return 1
+		;;
+	esac
+	pass_command="$1"
+	name="$(next_secret_entry "${2%/*}")"
+	secret_id="${2##*/}"
+	shift 2
+	pass_dispatch "$pass_command" "$name" "$@" && write_secret_entry "$name" "$name" "$secret_id"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
