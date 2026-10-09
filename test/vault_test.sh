@@ -7,27 +7,6 @@ setUp() {
 	PASSS_TESTING=1 . ./passs.sh
 }
 
-stub_recording() {
-	for function_name in "$@"; do
-		eval "$function_name() { append_call \"$function_name \$*\"; }"
-		register_stub "$function_name"
-	done
-}
-
-stub_failing() {
-	for function_name in "$@"; do
-		eval "$function_name() { append_call \"$function_name \$*\"; return 1; }"
-		register_stub "$function_name"
-	done
-}
-
-stub_store_in_tmpdir() {
-	STUB_STORE_DIR="$SHUNIT_TMPDIR/$1"
-	password_store_dir() { printf '%s\n' "$STUB_STORE_DIR"; }
-	register_stub password_store_dir
-	mkdir -p "$STUB_STORE_DIR/.git" "$STUB_STORE_DIR/vault"
-}
-
 stub_tars() {
 	STUB_CURRENT_TAR="$1"
 	STUB_COMMITTED_TAR="$2"
@@ -251,10 +230,11 @@ test_vault_git_runs_git_inside_vault() {
 
 test_vault_history_commits_after_snapshot_print_fast_import_blocks() {
 	vault_git() {
-		case "$1 $3" in
+		case "$1 $3 $4" in
 		"rev-list "*) printf '%s\n' foo bar ;;
-		"show --format=%B") printf 'Add %s.\n' "$4" ;;
-		*) printf 'author a <a@b> 1 +0000\ncommitter a <a@b> 1 +0000\n' ;;
+		"show --format=%B "*) printf 'Add %s.\n' "$4" ;;
+		*"%an <%ae> %ad") printf 'a <a@b> 1 +0000\n' ;;
+		*) printf 'c <c@d> 2 +0000\n' ;;
 		esac
 	}
 	register_stub vault_git
@@ -262,15 +242,56 @@ test_vault_history_commits_after_snapshot_print_fast_import_blocks() {
 	assert_success
 	assert_output "commit refs/heads/main
 author a <a@b> 1 +0000
-committer a <a@b> 1 +0000
+committer c <c@d> 2 +0000
 data 9
 Add foo.
 
 commit refs/heads/main
 author a <a@b> 1 +0000
-committer a <a@b> 1 +0000
+committer c <c@d> 2 +0000
 data 9
 Add bar."
+}
+
+test_format_history_entry_prints_fast_import_block() {
+	run_with_output format_history_entry "a <a@b> 1 +0000" "c <c@d> 2 +0000" "Add tag 'foo' for vault/bar.com"
+	assert_success
+	assert_output "commit refs/heads/main
+author a <a@b> 1 +0000
+committer c <c@d> 2 +0000
+data 32
+Add tag 'foo' for vault/bar.com"
+}
+
+test_append_vault_history_appends_entry_and_separator() {
+	stub_store_in_tmpdir history
+	printf 'foo\n\n' >"$STUB_STORE_DIR/vault/.githistory"
+	run append_vault_history "bar"
+	assert_success
+	assertEquals "$(printf 'foo\n\nbar\n\n.')" "$(
+		cat "$STUB_STORE_DIR/vault/.githistory"
+		printf '.'
+	)"
+}
+
+test_commit_entry_change_vault_file_records_history_and_seals() {
+	store_git() { printf '%s\n' "$2"; }
+	format_history_entry() { printf '%s|%s|%s\n' "$1" "$2" "$3"; }
+	register_stub store_git
+	register_stub format_history_entry
+	stub_recording append_vault_history vault_seal commit_store_change
+	run commit_entry_change "foo" "$HOME/.password-store/vault/bar.com/.site.meta.json"
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"append_vault_history GIT_AUTHOR_IDENT|GIT_COMMITTER_IDENT|foo" \
+		"vault_seal ")"
+}
+
+test_commit_entry_change_regular_file_commits_to_store() {
+	stub_recording append_vault_history vault_seal commit_store_change
+	run commit_entry_change "foo" "$HOME/.password-store/bar.com/.site.meta.json"
+	assert_success
+	assert_calls "commit_store_change foo $HOME/.password-store/bar.com/.site.meta.json"
 }
 
 test_vault_history_no_commits_prints_nothing() {
