@@ -544,7 +544,16 @@ lint_leaked_id_message() {
 }
 
 lint_leaked_id_remediation() {
-	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example with 'passs generate --secret foo.com', or into the vault."
+	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden_credentials_1 with 'id: bar' after the password, or into the vault."
+}
+
+lint_leaked_id_fix() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	target="$(next_secret_entry "$(parent_dir "$path")")"
+	write_secret_entry "$path" "$target" "$name" &&
+		pass_dispatch rm -f "$path" >/dev/null &&
+		echo "fixed: moved '$path' to '$target' with its id"
 }
 
 ###############################################################################
@@ -629,9 +638,11 @@ next_secret_entry() {
 	echo "$1/hidden_credentials_$index"
 }
 
-append_secret_id() {
-	password="$(pass show "$1")" &&
-		printf '%s\nid: %s\n' "$password" "$2" | pass_dispatch insert -m -f "$1" >/dev/null
+write_secret_entry() {
+	content="$(pass show "$1")" || return
+	password="$(printf '%s\n' "$content" | head -n 1)"
+	printf '%s\nid: %s%s\n' "$password" "$3" "${content#"$password"}" |
+		pass_dispatch insert -m -f "$2" >/dev/null
 }
 
 generate_secret() {
@@ -648,7 +659,7 @@ generate_secret() {
 		return 1
 	}
 	shift
-	pass_dispatch generate "$name" "$@" && append_secret_id "$name" "$secret_id"
+	pass_dispatch generate "$name" "$@" && write_secret_entry "$name" "$name" "$secret_id"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
