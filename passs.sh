@@ -210,6 +210,11 @@ vault_history() {
 	done
 }
 
+vault_remove() {
+	path_exists "$(vault_blob_path)" || return 0
+	remove_path "$(vault_blob_path)" && commit_store_change "Remove vault" .vault.enc
+}
+
 vault_pass() {
 	history_repository="$(mktemp -d "$(store_temp_path vault-history-XXXXXX)")" &&
 		make_dir "$(vault_dir)" &&
@@ -224,6 +229,11 @@ vault_pass() {
 	pass "$@"
 	status=$?
 	trap - INT TERM HUP
+	[ -d "$(vault_dir)" ] || {
+		remove_path "$history_repository"
+		vault_remove || return 1
+		return $status
+	}
 	history="$(vault_history "$snapshot")"
 	remove_path "$history_repository" "$(vault_dir)/.git"
 	[ -z "$history" ] || { printf '%s\n\n' "$history" >>"$(vault_dir)/.githistory" && vault_seal; } || status=$?
@@ -231,7 +241,10 @@ vault_pass() {
 }
 
 vault_unseal() {
-	path_exists "$(vault_blob_path)" || return 0
+	path_exists "$(vault_blob_path)" || {
+		remove_path "$(vault_dir)"
+		return
+	}
 	temp_dir="$(mktemp -d "$(store_temp_path vault-XXXXXX)")" &&
 		vault_decrypt <"$(vault_blob_path)" | tar -C "$temp_dir" -xf - &&
 		remove_path "$(vault_dir)" &&

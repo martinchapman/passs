@@ -126,13 +126,14 @@ test_vault_seal_decrypt_fails_skips_commit_and_removes_temp_files() {
 	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
 }
 
-test_vault_unseal_blob_absent_does_nothing() {
-	path_exists() { return 1; }
-	register_stub path_exists
+test_vault_unseal_blob_absent_removes_vault() {
+	stub_store_in_tmpdir removed
+	printf 'old' >"$STUB_STORE_DIR/vault/stale.gpg"
 	stub_recording vault_decrypt move_file
 	run vault_unseal
 	assert_success
 	assert_calls ""
+	assertFalse "expected vault removed" "[ -e '$STUB_STORE_DIR/vault' ]"
 }
 
 test_vault_unseal_blob_present_replaces_vault() {
@@ -313,6 +314,43 @@ test_vault_pass_link_removed_before_seal() {
 	*"vault_seal link=0"*) : ;;
 	*) fail "expected vault/.git removed before sealing" ;;
 	esac
+}
+
+test_vault_pass_vault_removed_removes_blob_and_skips_history() {
+	stub_vault_pass_setup removing
+	pass() {
+		append_call "pass $*"
+		rm -rf "$STUB_STORE_DIR/vault"
+	}
+	register_stub pass
+	stub_recording vault_remove vault_history vault_seal
+	run vault_pass rm -r vault
+	assert_success
+	assert_calls "$(printf '%s\n%s\n%s\n%s\n%s' \
+		"vault_git init" \
+		"vault_git add" \
+		"vault_git commit" \
+		"pass rm -r vault" \
+		"vault_remove ")"
+	assertEquals "" "$(ls "$STUB_STORE_DIR/.git")"
+}
+
+test_vault_remove_blob_present_removes_and_commits() {
+	stub_store_in_tmpdir blobbed
+	touch "$STUB_STORE_DIR/.vault.enc"
+	stub_recording commit_store_change
+	run vault_remove
+	assert_success
+	assertFalse "expected blob removed" "[ -e '$STUB_STORE_DIR/.vault.enc' ]"
+	assert_calls "commit_store_change Remove vault .vault.enc"
+}
+
+test_vault_remove_blob_absent_does_nothing() {
+	stub_store_in_tmpdir unblobbed
+	stub_recording commit_store_change
+	run vault_remove
+	assert_success
+	assert_calls ""
 }
 
 test_vault_pass_pass_fails_returns_its_status() {
