@@ -10,7 +10,7 @@ setUp() {
 stub_secret_inputs() {
 	STUB_SECRET_ID="$1"
 	prompt_secret_id() { printf '%s\n' "$STUB_SECRET_ID"; }
-	next_secret_entry() { printf '%s/hidden_credentials_1\n' "$1"; }
+	next_secret_entry() { printf '%s/hidden-credentials-1\n' "$1"; }
 	register_stub prompt_secret_id
 	register_stub next_secret_entry
 }
@@ -19,29 +19,29 @@ test_next_secret_entry_none_exist_returns_first() {
 	path_exists() { return 1; }
 	register_stub path_exists
 	run_with_output next_secret_entry foo.com
-	assert_output "foo.com/hidden_credentials_1"
+	assert_output "foo.com/hidden-credentials-1"
 }
 
 test_next_secret_entry_some_exist_returns_first_unused() {
 	path_exists() {
 		case "$1" in
-		"$HOME"/.password-store/foo.com/hidden_credentials_[12].gpg) return 0 ;;
+		"$HOME"/.password-store/foo.com/hidden-credentials-[12].gpg) return 0 ;;
 		esac
 		return 1
 	}
 	register_stub path_exists
 	run_with_output next_secret_entry foo.com
-	assert_output "foo.com/hidden_credentials_3"
+	assert_output "foo.com/hidden-credentials-3"
 }
 
 test_prompt_secret_id_reads_line_from_input() {
-	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden_credentials_1 2>/dev/null)"
+	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden-credentials-1 2>/dev/null)"
 	assertEquals "foo-id" "$TEST_OUTPUT"
 }
 
 test_prompt_secret_id_names_entry_in_prompt() {
-	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden_credentials_1 2>&1 >/dev/null)"
-	assertEquals "Enter id for foo.com/hidden_credentials_1: " "$TEST_OUTPUT"
+	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden-credentials-1 2>&1 >/dev/null)"
+	assertEquals "Enter id for foo.com/hidden-credentials-1: " "$TEST_OUTPUT"
 }
 
 stub_pass_show_and_insert() {
@@ -57,9 +57,9 @@ stub_pass_show_and_insert() {
 
 test_write_secret_entry_password_only_appends_id_line() {
 	stub_pass_show_and_insert bar
-	run write_secret_entry foo.com/hidden_credentials_1 foo.com/hidden_credentials_1 foo-id
+	run write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 foo-id
 	assert_success
-	assertEquals "insert -m -f foo.com/hidden_credentials_1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
+	assertEquals "insert -m -f foo.com/hidden-credentials-1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
 	assertEquals "bar
 id: foo-id" "$(cat "$SHUNIT_TMPDIR/pass-input")"
 }
@@ -68,9 +68,9 @@ test_write_secret_entry_extra_lines_inserts_id_after_password() {
 	stub_pass_show_and_insert "bar
 url: baz.com
 qux"
-	run write_secret_entry foo.com/foo-id foo.com/hidden_credentials_1 foo-id
+	run write_secret_entry foo.com/foo-id foo.com/hidden-credentials-1 foo-id
 	assert_success
-	assertEquals "insert -m -f foo.com/hidden_credentials_1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
+	assertEquals "insert -m -f foo.com/hidden-credentials-1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
 	assertEquals "bar
 id: foo-id
 url: baz.com
@@ -82,7 +82,7 @@ test_write_secret_entry_show_fails_skips_insert() {
 	pass_dispatch() { touch "$SHUNIT_TMPDIR/pass-inserted"; }
 	register_stub pass
 	register_stub pass_dispatch
-	run write_secret_entry foo.com/foo-id foo.com/hidden_credentials_1 foo-id
+	run write_secret_entry foo.com/foo-id foo.com/hidden-credentials-1 foo-id
 	assert_failure
 	assertFalse "[ -e '$SHUNIT_TMPDIR/pass-inserted' ]"
 }
@@ -93,8 +93,8 @@ test_generate_secret_generates_then_writes_id() {
 	run generate_secret foo.com/ -n 12
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
-		"pass_dispatch generate foo.com/hidden_credentials_1 -n 12" \
-		"write_secret_entry foo.com/hidden_credentials_1 foo.com/hidden_credentials_1 foo-id")"
+		"pass_dispatch generate foo.com/hidden-credentials-1 -n 12" \
+		"write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 foo-id")"
 }
 
 test_generate_secret_generate_overwrites_id_variable_writes_entered_id() {
@@ -104,7 +104,7 @@ test_generate_secret_generate_overwrites_id_variable_writes_entered_id() {
 	stub_recording write_secret_entry
 	run generate_secret foo.com
 	assert_success
-	assert_calls "write_secret_entry foo.com/hidden_credentials_1 foo.com/hidden_credentials_1 foo-id"
+	assert_calls "write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 foo-id"
 }
 
 test_generate_secret_generate_fails_skips_write() {
@@ -113,7 +113,7 @@ test_generate_secret_generate_fails_skips_write() {
 	stub_recording write_secret_entry
 	run generate_secret foo.com
 	assert_failure
-	assert_calls "pass_dispatch generate foo.com/hidden_credentials_1"
+	assert_calls "pass_dispatch generate foo.com/hidden-credentials-1"
 }
 
 test_generate_secret_missing_or_option_folder_shows_usage() {

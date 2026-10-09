@@ -318,7 +318,7 @@ Commands:
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
   generate --secret pass-folder [pass generate args]
-                                    Prompt for an id, generate a password and save both as pass-folder/hidden_credentials_N
+                                    Prompt for an id, generate a password and save both as pass-folder/hidden-credentials-N
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -520,7 +520,7 @@ web_entries() {
 
 looks_like_id() {
 	case "$1" in
-	*@* | hidden_credentials_[0-9]*) return 1 ;;
+	*@* | hidden-credentials-[0-9]*) return 1 ;;
 	esac
 	generic_account_words | grep -qixF "$1" && return 1
 	for part in $2; do
@@ -544,7 +544,7 @@ lint_leaked_id_message() {
 }
 
 lint_leaked_id_remediation() {
-	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden_credentials_1 with 'id: bar' after the password, or into the vault."
+	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
 }
 
 lint_leaked_id_fix() {
@@ -632,10 +632,10 @@ prompt_secret_id() {
 
 next_secret_entry() {
 	index=1
-	while path_exists "$(password_store_dir)/$1/hidden_credentials_$index.gpg"; do
+	while path_exists "$(password_store_dir)/$1/hidden-credentials-$index.gpg"; do
 		index=$((index + 1))
 	done
-	echo "$1/hidden_credentials_$index"
+	echo "$1/hidden-credentials-$index"
 }
 
 write_secret_entry() {

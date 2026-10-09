@@ -648,7 +648,7 @@ test_looks_like_id_email_returns_failure() {
 }
 
 test_looks_like_id_hidden_credentials_returns_failure() {
-	run looks_like_id hidden_credentials_12 "Foo Bar"
+	run looks_like_id hidden-credentials-12 "Foo Bar"
 	assert_failure
 }
 
@@ -690,22 +690,22 @@ test_lint_leaked_id_message_formats_record() {
 test_lint_leaked_id_remediation_reports_overall_advice() {
 	run_with_output lint_leaked_id_remediation
 	assert_success
-	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden_credentials_1 with 'id: bar' after the password, or into the vault."
+	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
 }
 
 test_lint_leaked_id_fix_write_succeeds_writes_new_entry_then_removes_old() {
-	next_secret_entry() { printf '%s/hidden_credentials_2\n' "$1"; }
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
 	register_stub next_secret_entry
 	stub_recording write_secret_entry pass_dispatch
 	run lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/bar/x7Fq2')"
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
-		"write_secret_entry foo.com/bar/x7Fq2 foo.com/bar/hidden_credentials_2 x7Fq2" \
+		"write_secret_entry foo.com/bar/x7Fq2 foo.com/bar/hidden-credentials-2 x7Fq2" \
 		"pass_dispatch rm -f foo.com/bar/x7Fq2")"
 }
 
 test_lint_leaked_id_fix_write_succeeds_reports_change() {
-	next_secret_entry() { printf '%s/hidden_credentials_2\n' "$1"; }
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
 	write_secret_entry() { :; }
 	pass_dispatch() { :; }
 	register_stub next_secret_entry
@@ -713,17 +713,17 @@ test_lint_leaked_id_fix_write_succeeds_reports_change() {
 	register_stub pass_dispatch
 	run_with_output lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
 	assert_success
-	assert_output "fixed: moved 'foo.com/x7Fq2' to 'foo.com/hidden_credentials_2' with its id"
+	assert_output "fixed: moved 'foo.com/x7Fq2' to 'foo.com/hidden-credentials-2' with its id"
 }
 
 test_lint_leaked_id_fix_write_fails_keeps_old_entry() {
-	next_secret_entry() { printf '%s/hidden_credentials_2\n' "$1"; }
+	next_secret_entry() { printf '%s/hidden-credentials-2\n' "$1"; }
 	register_stub next_secret_entry
 	stub_failing write_secret_entry
 	stub_recording pass_dispatch
 	run lint_leaked_id_fix "$(printf 'x7Fq2\tfoo.com/x7Fq2')"
 	assert_failure
-	assert_calls "write_secret_entry foo.com/x7Fq2 foo.com/hidden_credentials_2 x7Fq2"
+	assert_calls "write_secret_entry foo.com/x7Fq2 foo.com/hidden-credentials-2 x7Fq2"
 }
 
 test_repeated_site_address_address_in_name_prints_address() {
