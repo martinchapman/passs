@@ -317,8 +317,8 @@ Commands:
   description pass-name <text>      Set an entry's description and commit it
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
-  generate --secret pass-folder [pass generate args]
-                                    Prompt for an id, generate a password and save both as pass-folder/hidden-credentials-N
+  generate|insert --secret pass-folder/id [pass args]
+                                    Run pass generate or insert for pass-folder/hidden-credentials-N, then add 'id: <id>' after the password
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -387,11 +387,12 @@ passs_main() {
 		*) pass "$@" ;;
 		esac
 		;;
-	generate)
+	generate | insert)
 		case "$2" in
 		--secret)
+			pass_command="$1"
 			shift 2
-			generate_secret "$@"
+			add_secret_entry "$pass_command" "$@"
 			;;
 		*) pass_dispatch "$@" ;;
 		esac
@@ -624,12 +625,6 @@ lint_redundant_address_fix() {
 # Secret generation
 ###############################################################################
 
-prompt_secret_id() {
-	printf 'Enter id for %s: ' "$1" >&2
-	read -r id
-	echo "$id"
-}
-
 next_secret_entry() {
 	index=1
 	while path_exists "$(password_store_dir)/$1/hidden-credentials-$index.gpg"; do
@@ -645,21 +640,19 @@ write_secret_entry() {
 		pass_dispatch insert -m -f "$2" >/dev/null
 }
 
-generate_secret() {
-	case "$1" in
-	"" | -*)
-		echo "Usage: passs generate --secret pass-folder [pass generate args]"
+add_secret_entry() {
+	case "$2" in
+	[!-/]*/*[!/]) ;;
+	*)
+		echo "Usage: passs $1 --secret pass-folder/id [pass $1 args]"
 		return 1
 		;;
 	esac
-	name="$(next_secret_entry "${1%/}")"
-	secret_id="$(prompt_secret_id "$name")"
-	[ -n "$secret_id" ] || {
-		echo "error: id can't be empty" >&2
-		return 1
-	}
-	shift
-	pass_dispatch generate "$name" "$@" && write_secret_entry "$name" "$name" "$secret_id"
+	pass_command="$1"
+	name="$(next_secret_entry "${2%/*}")"
+	secret_id="${2##*/}"
+	shift 2
+	pass_dispatch "$pass_command" "$name" "$@" && write_secret_entry "$name" "$name" "$secret_id"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"

@@ -7,11 +7,8 @@ setUp() {
 	PASSS_TESTING=1 . ./passs.sh
 }
 
-stub_secret_inputs() {
-	STUB_SECRET_ID="$1"
-	prompt_secret_id() { printf '%s\n' "$STUB_SECRET_ID"; }
+stub_next_secret_entry() {
 	next_secret_entry() { printf '%s/hidden-credentials-1\n' "$1"; }
-	register_stub prompt_secret_id
 	register_stub next_secret_entry
 }
 
@@ -32,16 +29,6 @@ test_next_secret_entry_some_exist_returns_first_unused() {
 	register_stub path_exists
 	run_with_output next_secret_entry foo.com
 	assert_output "foo.com/hidden-credentials-3"
-}
-
-test_prompt_secret_id_reads_line_from_input() {
-	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden-credentials-1 2>/dev/null)"
-	assertEquals "foo-id" "$TEST_OUTPUT"
-}
-
-test_prompt_secret_id_names_entry_in_prompt() {
-	TEST_OUTPUT="$(echo foo-id | prompt_secret_id foo.com/hidden-credentials-1 2>&1 >/dev/null)"
-	assertEquals "Enter id for foo.com/hidden-credentials-1: " "$TEST_OUTPUT"
 }
 
 stub_pass_show_and_insert() {
@@ -87,63 +74,81 @@ test_write_secret_entry_show_fails_skips_insert() {
 	assertFalse "[ -e '$SHUNIT_TMPDIR/pass-inserted' ]"
 }
 
-test_generate_secret_generates_then_writes_id() {
-	stub_secret_inputs foo-id
+test_add_secret_entry_generate_uses_last_path_part_as_id() {
+	stub_next_secret_entry
 	stub_recording pass_dispatch write_secret_entry
-	run generate_secret foo.com/ -n 12
+	run add_secret_entry generate foo.com/baz/bar -n 12
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
-		"pass_dispatch generate foo.com/hidden-credentials-1 -n 12" \
-		"write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 foo-id")"
+		"pass_dispatch generate foo.com/baz/hidden-credentials-1 -n 12" \
+		"write_secret_entry foo.com/baz/hidden-credentials-1 foo.com/baz/hidden-credentials-1 bar")"
 }
 
-test_generate_secret_generate_overwrites_id_variable_writes_entered_id() {
-	stub_secret_inputs foo-id
+test_add_secret_entry_insert_uses_last_path_part_as_id() {
+	stub_next_secret_entry
+	stub_recording pass_dispatch write_secret_entry
+	run add_secret_entry insert foo.com/bar -m
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"pass_dispatch insert foo.com/hidden-credentials-1 -m" \
+		"write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 bar")"
+}
+
+test_add_secret_entry_pass_overwrites_id_variable_writes_path_id() {
+	stub_next_secret_entry
 	pass_dispatch() { id=; }
 	register_stub pass_dispatch
 	stub_recording write_secret_entry
-	run generate_secret foo.com
+	run add_secret_entry generate foo.com/bar
 	assert_success
-	assert_calls "write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 foo-id"
+	assert_calls "write_secret_entry foo.com/hidden-credentials-1 foo.com/hidden-credentials-1 bar"
 }
 
-test_generate_secret_generate_fails_skips_write() {
-	stub_secret_inputs foo-id
+test_add_secret_entry_pass_fails_skips_write() {
+	stub_next_secret_entry
 	stub_failing pass_dispatch
 	stub_recording write_secret_entry
-	run generate_secret foo.com
+	run add_secret_entry generate foo.com/bar
 	assert_failure
 	assert_calls "pass_dispatch generate foo.com/hidden-credentials-1"
 }
 
-test_generate_secret_missing_or_option_folder_shows_usage() {
-	for folder in "" -n; do
-		run_with_output generate_secret "$folder"
-		assert_failure
-		assert_output "Usage: passs generate --secret pass-folder [pass generate args]"
-	done
-}
-
-test_generate_secret_empty_id_reports_error() {
-	stub_secret_inputs ""
+test_add_secret_entry_path_without_folder_and_id_shows_usage() {
 	stub_recording pass_dispatch write_secret_entry
-	run_with_output generate_secret foo.com
-	assert_failure
-	assert_output "error: id can't be empty"
+	for path in "" -n bar foo.com/ /bar; do
+		run_with_output add_secret_entry insert "$path"
+		assert_failure
+		assert_output "Usage: passs insert --secret pass-folder/id [pass insert args]"
+	done
+	assert_calls ""
 }
 
-test_passs_main_generate_secret_routes_to_generate_secret() {
-	stub_recording generate_secret pass_dispatch
-	run passs_main generate --secret foo.com -n 12
+test_passs_main_generate_secret_routes_to_add_secret_entry() {
+	stub_recording add_secret_entry pass_dispatch
+	run passs_main generate --secret foo.com/bar -n 12
 	assert_success
-	assert_calls "generate_secret foo.com -n 12"
+	assert_calls "add_secret_entry generate foo.com/bar -n 12"
+}
+
+test_passs_main_insert_secret_routes_to_add_secret_entry() {
+	stub_recording add_secret_entry pass_dispatch
+	run passs_main insert --secret foo.com/bar -m
+	assert_success
+	assert_calls "add_secret_entry insert foo.com/bar -m"
 }
 
 test_passs_main_generate_without_secret_routes_to_pass_dispatch() {
-	stub_recording generate_secret pass_dispatch
+	stub_recording add_secret_entry pass_dispatch
 	run passs_main generate foo.com/bar 12
 	assert_success
 	assert_calls "pass_dispatch generate foo.com/bar 12"
+}
+
+test_passs_main_insert_without_secret_routes_to_pass_dispatch() {
+	stub_recording add_secret_entry pass_dispatch
+	run passs_main insert foo.com/bar
+	assert_success
+	assert_calls "pass_dispatch insert foo.com/bar"
 }
 
 . "$(command -v shunit2 || echo /usr/share/shunit2/shunit2)"
