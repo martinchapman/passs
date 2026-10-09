@@ -50,24 +50,61 @@ test_ensure_meta_file_file_exists_skips_write() {
 		"meta_file_exists $file")"
 }
 
-test_commit_meta_change_git_succeeds_returns_success() {
-	stub_git_success
-	run_with_output commit_meta_change "bar.com/.site.meta.json" "foo"
-	assert_success
-	assert_output ""
+test_store_temp_path_returns_path_inside_git_dir() {
+	run_with_output store_temp_path foo
+	assert_output "$HOME/.password-store/.git/passs-foo"
 }
 
-test_commit_meta_change_git_add_fails_returns_failure() {
-	stub_git_add_failure
-	run_with_output commit_meta_change "bar.com/.site.meta.json" "foo"
+test_ensure_line_line_missing_appends_on_new_line() {
+	file="$SHUNIT_TMPDIR/missing"
+	printf 'foo' >"$file"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "foo
+bar" "$(cat "$file")"
+}
+
+test_ensure_line_line_present_leaves_file_unchanged() {
+	file="$SHUNIT_TMPDIR/present"
+	printf 'bar\nfoo\n' >"$file"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "bar
+foo" "$(cat "$file")"
+}
+
+test_ensure_line_file_absent_creates_file() {
+	file="$SHUNIT_TMPDIR/absent"
+	run ensure_line "$file" "bar"
+	assert_success
+	assertEquals "bar" "$(cat "$file")"
+}
+
+test_commit_store_change_add_succeeds_commits_only_given_paths() {
+	store_git() { append_call "store_git $*"; }
+	register_stub store_git
+	run commit_store_change "foo" bar.com/.site.meta.json baz.com/.site.meta.json
+	assert_success
+	assert_calls "$(printf '%s\n%s' \
+		"store_git add -- bar.com/.site.meta.json baz.com/.site.meta.json" \
+		"store_git commit -m foo -- bar.com/.site.meta.json baz.com/.site.meta.json")"
+}
+
+test_commit_store_change_add_fails_skips_commit() {
+	store_git() {
+		append_call "store_git $*"
+		return 1
+	}
+	register_stub store_git
+	run commit_store_change "foo" bar.com/.site.meta.json
 	assert_failure
-	assert_output ""
+	assert_calls "store_git add -- bar.com/.site.meta.json"
 }
 
 test_add_tag_tag_is_new_appends_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_store_change_success
 	meta_has_tag() { return 1; }
 	append_meta_tag() {
 		append_call "append_meta_tag $1 $2"
@@ -79,7 +116,7 @@ test_add_tag_tag_is_new_appends_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"append_meta_tag $file foo" \
-		"commit_meta_change $file Add tag 'foo' for bar.com")"
+		"commit_store_change Add tag 'foo' for bar.com $file")"
 }
 
 test_add_tag_tag_exists_reports_already_exists() {
@@ -95,7 +132,7 @@ test_add_tag_tag_exists_reports_already_exists() {
 test_add_tag_commit_fails_returns_failure() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_failure
+	stub_commit_store_change_failure
 	meta_has_tag() { return 1; }
 	append_meta_tag() {
 		append_call "append_meta_tag $1 $2"
@@ -107,7 +144,7 @@ test_add_tag_commit_fails_returns_failure() {
 	assert_failure
 	assert_calls "$(printf '%s\n%s' \
 		"append_meta_tag $file foo" \
-		"commit_meta_change $file Add tag 'foo' for bar.com")"
+		"commit_store_change Add tag 'foo' for bar.com $file")"
 }
 
 test_add_description_description_matches_reports_already_set() {
@@ -123,7 +160,7 @@ test_add_description_description_matches_reports_already_set() {
 test_add_description_description_missing_adds_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_store_change_success
 	meta_description() { printf '\n'; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -135,13 +172,13 @@ test_add_description_description_missing_adds_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Add description for bar.com")"
+		"commit_store_change Add description for bar.com $file")"
 }
 
 test_add_description_description_differs_updates_and_commits() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_success
+	stub_commit_store_change_success
 	meta_description() { printf '%s\n' "foo"; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -153,13 +190,13 @@ test_add_description_description_differs_updates_and_commits() {
 	assert_success
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Update description for bar.com")"
+		"commit_store_change Update description for bar.com $file")"
 }
 
 test_add_description_commit_fails_returns_failure() {
 	file="$TEST_ROOT/meta.json"
 	stub_ensure_meta_file "$file"
-	stub_commit_meta_change_failure
+	stub_commit_store_change_failure
 	meta_description() { printf '%s\n' "foo"; }
 	set_meta_description() {
 		append_call "set_meta_description $1 $2"
@@ -171,7 +208,7 @@ test_add_description_commit_fails_returns_failure() {
 	assert_failure
 	assert_calls "$(printf '%s\n%s' \
 		"set_meta_description $file bar" \
-		"commit_meta_change $file Update description for bar.com")"
+		"commit_store_change Update description for bar.com $file")"
 }
 
 test_get_description_description_set_prints_description() {

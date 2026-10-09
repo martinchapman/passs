@@ -65,35 +65,20 @@ stub_ensure_meta_file() {
 	register_stub ensure_meta_file
 }
 
-stub_commit_meta_change_success() {
-	commit_meta_change() {
-		append_call "commit_meta_change $1 $2"
+stub_commit_store_change_success() {
+	commit_store_change() {
+		append_call "commit_store_change $*"
 		return 0
 	}
-	register_stub commit_meta_change
+	register_stub commit_store_change
 }
 
-stub_commit_meta_change_failure() {
-	commit_meta_change() {
-		append_call "commit_meta_change $1 $2"
+stub_commit_store_change_failure() {
+	commit_store_change() {
+		append_call "commit_store_change $*"
 		return 1
 	}
-	register_stub commit_meta_change
-}
-
-stub_git_success() {
-	git() { return 0; }
-	register_stub git
-}
-
-stub_git_add_failure() {
-	git() {
-		case " $* " in
-		*" add "*) return 1 ;;
-		*) return 0 ;;
-		esac
-	}
-	register_stub git
+	register_stub commit_store_change
 }
 
 stub_download_success() {

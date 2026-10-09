@@ -2,10 +2,13 @@
 VERSION="0.1.7"
 
 password_store_dir() { echo "$HOME/.password-store"; }
-meta_file() { echo "$HOME/.password-store/$1/.site.meta.json"; }
+store_temp_path() { echo "$(password_store_dir)/.git/passs-$1"; }
+store_git() { git -C "$(password_store_dir)" "$@"; }
+meta_file() { echo "$(password_store_dir)/$1/.site.meta.json"; }
 parent_dir() { dirname "$1"; }
 make_dir() { mkdir -p "$1"; }
 move_file() { mv "$1" "$2"; }
+remove_path() { rm -rf "$@"; }
 path_exists() { [ -e "$1" ]; }
 meta_file_exists() { [ -f "$1" ]; }
 write_default_meta_file() { printf '{"tags":[],"description":""}\n' >"$1"; }
@@ -17,8 +20,15 @@ ensure_meta_file() {
 	echo "$file"
 }
 
-commit_meta_change() {
-	git -C "$HOME/.password-store" add "$1" && git -C "$HOME/.password-store" commit -m "$2"
+ensure_line() {
+	[ -s "$1" ] && [ -n "$(tail -c 1 "$1")" ] && echo >>"$1"
+	grep -qxF "$2" "$1" 2>/dev/null || echo "$2" >>"$1"
+}
+
+commit_store_change() {
+	message="$1"
+	shift
+	store_git add -- "$@" && store_git commit -m "$message" -- "$@"
 }
 
 meta_has_tag() { jq -e --arg t "$2" '.tags | index($t)' "$1" >/dev/null 2>&1; }
@@ -28,7 +38,7 @@ add_tag() {
 	file="$(ensure_meta_file "$1")"
 	meta_has_tag "$file" "$2" || {
 		append_meta_tag "$file" "$2"
-		commit_meta_change "$file" "Add tag '$2' for $1"
+		commit_store_change "Add tag '$2' for $1" "$file"
 		return
 	}
 	echo "Tag '$2' already exists in $file"
@@ -46,7 +56,7 @@ add_description() {
 	}
 	set_meta_description "$file" "$2"
 	[ -n "$current_description" ] && verb="Update" || verb="Add"
-	commit_meta_change "$file" "$verb description for $1"
+	commit_store_change "$verb description for $1" "$file"
 }
 
 get_description() {
@@ -140,6 +150,63 @@ lint() {
 	done
 }
 
+###############################################################################
+# Vault
+###############################################################################
+
+vault_dir() { echo "$(password_store_dir)/vault"; }
+vault_blob_path() { echo "$(password_store_dir)/.vault.enc"; }
+
+names_vault_entry() {
+	for arg in "$@"; do
+		case "$arg" in
+		vault | vault/*) return 0 ;;
+		esac
+	done
+	return 1
+}
+
+ensure_vault_ignored() { ensure_line "$(password_store_dir)/.gitignore" "/vault/"; }
+
+vault_tar() { tar -C "$1" --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - .; }
+
+vault_encrypt() {
+	set --
+	while IFS= read -r id; do
+		[ -n "$id" ] && set -- "$@" --hidden-recipient "$id"
+	done <"$(password_store_dir)/.gpg-id"
+	gpg --quiet --yes --encrypt "$@"
+}
+
+vault_decrypt() { gpg --quiet --yes --decrypt; }
+
+vault_committed_tar() {
+	! store_git cat-file -e HEAD:.vault.enc 2>/dev/null || store_git cat-file blob HEAD:.vault.enc | vault_decrypt
+}
+
+vault_seal() {
+	[ -d "$(vault_dir)" ] || return 0
+	current="$(store_temp_path vault-current.tar)"
+	committed="$(store_temp_path vault-committed.tar)"
+	ensure_vault_ignored &&
+		vault_tar "$(vault_dir)" >"$current" &&
+		vault_committed_tar >"$committed" &&
+		{ cmp -s "$current" "$committed" ||
+			{ vault_encrypt <"$current" >"$(vault_blob_path)" &&
+				commit_store_change "Update vault" .gitignore .vault.enc; }; }
+	status=$?
+	remove_path "$current" "$committed"
+	return $status
+}
+
+vault_unseal() {
+	path_exists "$(vault_blob_path)" || return 0
+	temp_dir="$(mktemp -d "$(store_temp_path vault-XXXXXX)")" &&
+		vault_decrypt <"$(vault_blob_path)" | tar -C "$temp_dir" -xf - &&
+		remove_path "$(vault_dir)" &&
+		move_file "$temp_dir" "$(vault_dir)"
+}
+
 passs_main() {
 	case "$1" in
 	tag)
@@ -187,8 +254,15 @@ passs_main() {
 		*) lint ;;
 		esac
 		;;
+	git)
+		case "$2" in
+		push) vault_seal && pass "$@" ;;
+		pull) vault_seal && pass "$@" && vault_unseal ;;
+		*) pass "$@" ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
-	*) pass "$@" ;;
+	*) { ! names_vault_entry "$@" || ensure_vault_ignored; } && pass "$@" ;;
 	esac
 }
 
