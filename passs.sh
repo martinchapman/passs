@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-VERSION="0.1.7"
+VERSION="0.1.8"
 
 password_store_dir() { echo "$HOME/.password-store"; }
 store_temp_path() { echo "$(password_store_dir)/.git/passs-$1"; }
