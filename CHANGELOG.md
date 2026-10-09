@@ -1,8 +1,17 @@
+## [0.1.8] - 2026-10-09
+
+### 🚀 Features
+
+- Add vault (#30)
 ## [0.1.7] - 2026-06-30
 
 ### 🚀 Features
 
 - *(lint)* Add subdomain folder name fix (#28)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.7 (#29)
 ## [0.1.6] - 2026-06-30
 
 ### 🚀 Features
@@ -63,17 +72,13 @@
 - Add description annotation
 - Add description annotation retrieval
 
-### 💼 Other
+### 📚 Documentation
 
-- Add install script
+- Add readme
 
 ### 🚜 Refactor
 
 - Make tag list a subcommand
-
-### 📚 Documentation
-
-- Add readme
 
 ### 🎨 Styling
 
@@ -83,3 +88,7 @@
 
 - Exclude subdirectories from subdomain check
 - Add release automation [skip ci]
+
+### 💼 Other
+
+- Add install script
