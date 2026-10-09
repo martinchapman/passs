@@ -694,7 +694,7 @@ test_lint_leaked_id_remediation_reports_overall_advice() {
 }
 
 test_repeated_site_address_address_in_name_prints_address() {
-	run_with_output repeated_site_address foo.com/bar@foo.com
+	run_with_output repeated_site_address foo.com/bar.foo.com
 	assert_output "foo.com"
 }
 
@@ -711,8 +711,15 @@ test_repeated_site_address_no_address_in_name_prints_nothing() {
 test_has_redundant_address_address_in_name_returns_success() {
 	repeated_site_address() { echo foo.com; }
 	register_stub repeated_site_address
-	run has_redundant_address foo.com/bar@foo.com
+	run has_redundant_address foo.com/bar.foo.com
 	assert_success
+}
+
+test_has_redundant_address_email_address_returns_failure() {
+	repeated_site_address() { echo foo.com; }
+	register_stub repeated_site_address
+	run has_redundant_address foo.com/bar@foo.com
+	assert_failure
 }
 
 test_has_redundant_address_name_is_label_in_any_case_returns_success() {
@@ -725,14 +732,14 @@ test_has_redundant_address_name_is_label_in_any_case_returns_success() {
 test_has_redundant_address_label_inside_name_returns_failure() {
 	repeated_site_address() { :; }
 	register_stub repeated_site_address
-	run has_redundant_address foo.com/bar@foo.net
+	run has_redundant_address foo.com/barfoo
 	assert_failure
 }
 
 test_redundant_address_fixed_name_address_at_end_strips_address_and_separator() {
 	repeated_site_address() { echo foo.com; }
 	register_stub repeated_site_address
-	run_with_output redundant_address_fixed_name foo.com/bar@foo.com
+	run_with_output redundant_address_fixed_name foo.com/bar.foo.com
 	assert_output "bar"
 }
 
@@ -758,22 +765,22 @@ test_redundant_address_fixed_name_no_address_returns_user() {
 }
 
 test_lint_redundant_address_violations_emit_records_for_repeats_only() {
-	web_entries() { printf '%s\n' foo.com/bar@foo.com foo.com/baz; }
+	web_entries() { printf '%s\n' foo.com/bar.foo.com foo.com/baz; }
 	register_stub web_entries
 	run_with_output lint_redundant_address_violations
-	assert_output "$(printf 'bar@foo.com\tfoo.com/bar@foo.com')"
+	assert_output "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 }
 
 test_lint_redundant_address_message_formats_record() {
-	run_with_output lint_redundant_address_message "$(printf 'bar@foo.com\tfoo.com/bar@foo.com')"
+	run_with_output lint_redundant_address_message "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
-	assert_output "error: entry name 'bar@foo.com' repeats its site address at foo.com/bar@foo.com"
+	assert_output "error: entry name 'bar.foo.com' repeats its site address at foo.com/bar.foo.com"
 }
 
 test_lint_redundant_address_remediation_reports_overall_advice() {
 	run_with_output lint_redundant_address_remediation
 	assert_success
-	assert_output "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar@foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+	assert_output "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
 }
 
 test_lint_redundant_address_fix_target_absent_renames_entry() {
@@ -783,9 +790,9 @@ test_lint_redundant_address_fix_target_absent_renames_entry() {
 	register_stub password_store_dir
 	register_stub path_exists
 	register_stub move_file
-	run lint_redundant_address_fix "$(printf 'bar@foo.com\tfoo.com/bar@foo.com')"
+	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
-	assert_calls "move_file $TEST_ROOT/store/foo.com/bar@foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
 }
 
 test_lint_redundant_address_fix_target_absent_reports_change() {

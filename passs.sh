@@ -564,6 +564,7 @@ repeated_site_address() {
 }
 
 has_redundant_address() {
+	case "${1##*/}" in *@*) return 1 ;; esac
 	[ -n "$(repeated_site_address "$1")" ] ||
 		[ "$(printf '%s' "${1##*/}" | tr '[:upper:]' '[:lower:]')" = "${1%%.*}" ]
 }
@@ -577,7 +578,7 @@ redundant_address_fixed_name() {
 	name="${1##*/}"
 	before="${name%%"$address"*}"
 	after="${name#*"$address"}"
-	name="${before%[@._-]}${after#[@._-]}"
+	name="${before%[._-]}${after#[._-]}"
 	echo "${name:-user}"
 }
 
@@ -595,7 +596,7 @@ lint_redundant_address_message() {
 }
 
 lint_redundant_address_remediation() {
-	echo "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar@foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
+	echo "Entry names shouldn't repeat the site they're filed under, for example foo.com/bar.foo.com -> foo.com/bar, or foo.com/foo.com -> foo.com/user."
 }
 
 lint_redundant_address_fix() {
