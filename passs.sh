@@ -315,6 +315,8 @@ Commands:
   description pass-name <text>      Set an entry's description and commit it
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
+  generate --secret pass-folder [pass generate args]
+                                    Prompt for an id, generate a password and save both as pass-folder/hidden_credentials_N
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -383,19 +385,30 @@ passs_main() {
 		*) pass "$@" ;;
 		esac
 		;;
+	generate)
+		case "$2" in
+		--secret)
+			shift 2
+			generate_secret "$@"
+			;;
+		*) pass_dispatch "$@" ;;
+		esac
+		;;
 	--version | version) echo "pass wrapper v$VERSION" ;;
 	help | -h | --help) passs_help ;;
-	*)
-		if relocates_vault "$@"; then
-			echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
-			return 1
-		elif names_vault_entry "$@"; then
-			ensure_vault_ignored && vault_pass "$@"
-		else
-			pass "$@"
-		fi
-		;;
+	*) pass_dispatch "$@" ;;
 	esac
+}
+
+pass_dispatch() {
+	if relocates_vault "$@"; then
+		echo "error: moving or copying the whole vault isn't supported, move its entries instead" >&2
+		return 1
+	elif names_vault_entry "$@"; then
+		ensure_vault_ignored && vault_pass "$@"
+	else
+		pass "$@"
+	fi
 }
 
 ###############################################################################
@@ -483,6 +496,46 @@ lint_subdomain_folder_name_fix() {
 	make_dir "$(parent_dir "$target")" &&
 		move_file "$store_dir/$path" "$target" &&
 		echo "fixed: moved '$path' to '$target_relative'"
+}
+
+###############################################################################
+# Secret generation
+###############################################################################
+
+prompt_secret_id() {
+	printf 'Enter id for %s: ' "$1" >&2
+	read -r id
+	echo "$id"
+}
+
+next_secret_entry() {
+	index=1
+	while path_exists "$(password_store_dir)/$1/hidden_credentials_$index.gpg"; do
+		index=$((index + 1))
+	done
+	echo "$1/hidden_credentials_$index"
+}
+
+append_secret_id() {
+	password="$(pass show "$1")" &&
+		printf '%s\nid: %s\n' "$password" "$2" | pass_dispatch insert -m -f "$1" >/dev/null
+}
+
+generate_secret() {
+	case "$1" in
+	"" | -*)
+		echo "Usage: passs generate --secret pass-folder [pass generate args]"
+		return 1
+		;;
+	esac
+	name="$(next_secret_entry "${1%/}")"
+	secret_id="$(prompt_secret_id "$name")"
+	[ -n "$secret_id" ] || {
+		echo "error: id can't be empty" >&2
+		return 1
+	}
+	shift
+	pass_dispatch generate "$name" "$@" && append_secret_id "$name" "$secret_id"
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
