@@ -156,7 +156,7 @@ lint_rule_report() {
 lint_fix() {
 	lint_rules | while IFS= read -r rule; do
 		lint_rule_violations "$rule" | while IFS= read -r violation; do
-			lint_rule_fix "$rule" "$violation"
+			lint_rule_fix "$rule" "$violation" </dev/null
 		done
 	done
 }
