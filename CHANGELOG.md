@@ -1,8 +1,17 @@
+## [0.1.12] - 2026-10-10
+
+### ⚙️ Miscellaneous Tasks
+
+- *(lint)* Owned entries (#39)
 ## [0.1.11] - 2026-10-10
 
 ### 🚜 Refactor
 
 - *(lint)* Use browserpass friendly id field (#37)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.11 (#38)
 ## [0.1.10] - 2026-10-10
 
 ### 🚀 Features
