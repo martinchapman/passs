@@ -294,7 +294,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -317,7 +317,7 @@ test_lint_subdomain_folder_message_formats_record() {
 test_lint_subdomain_folder_remediation_reports_overall_advice() {
 	run_with_output lint_subdomain_folder_name_remediation
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+	assert_output "Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_no_violations_found_produces_no_output() {
@@ -378,7 +378,7 @@ test_lint_rule_report_reports_rule_advice() {
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_passs_script_lint_defines_rules_before_running_main() {
@@ -406,7 +406,7 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	run_with_output run_passs_lint_from_source
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_top_level_gpg_files_vault_present_searches_store_and_vault() {
@@ -437,6 +437,36 @@ test_lint_roots_vault_absent_lists_store_only() {
 	assert_output "$STUB_STORE_DIR"
 }
 
+test_host_dirs_lists_children_of_host_folders_only() {
+	stub_store_in_tmpdir hosts
+	mkdir -p "$STUB_STORE_DIR/owned/foo.bar.com/:22" "$STUB_STORE_DIR/foo.com/bar"
+	top_level_dirs() { printf '%s\n' "$STUB_STORE_DIR/owned" "$STUB_STORE_DIR/foo.com"; }
+	register_stub top_level_dirs
+	run_with_output host_dirs
+	assert_output "$STUB_STORE_DIR/owned/foo.bar.com"
+}
+
+test_lint_subdomain_folder_host_folder_emits_record() {
+	top_level_dirs() { printf '%s\n' "$HOME/.password-store/owned"; }
+	host_dirs() { printf '%s\n' "$HOME/.password-store/owned/foo.bar.com" "$HOME/.password-store/owned/bar.com"; }
+	register_stub top_level_dirs
+	register_stub host_dirs
+	run_with_output lint_subdomain_folder_name_violations
+	assert_output "$(printf 'foo.bar.com\towned/foo.bar.com')"
+}
+
+test_lint_subdomain_folder_name_fix_host_folder_moves_within_host_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub pass_dispatch
+	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.ac.uk\towned/foo.bar.ac.uk')"
+	assert_success
+	assert_calls "pass_dispatch mv owned/foo.bar.ac.uk owned/bar.ac.uk/foo"
+}
+
 test_lint_subdomain_folder_vault_folder_emits_record() {
 	top_level_dirs() {
 		printf '%s\n' \
@@ -456,33 +486,25 @@ test_lint_gpg_at_top_level_message_vault_file_shows_path() {
 test_lint_gpg_at_top_level_fix_vault_file_moves_within_vault() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tvault/foo.gpg')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/vault/foo" \
-		"move_file $TEST_ROOT/store/vault/foo.gpg $TEST_ROOT/store/vault/foo/password.gpg")"
+	assert_calls "pass_dispatch mv vault/foo vault/foo/password"
 }
 
 test_lint_subdomain_folder_name_fix_vault_folder_nests_within_vault() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tvault/foo.bar.com')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/vault/bar.com" \
-		"move_file $TEST_ROOT/store/vault/foo.bar.com $TEST_ROOT/store/vault/bar.com/foo")"
+	assert_calls "pass_dispatch mv vault/foo.bar.com vault/bar.com/foo"
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
@@ -494,31 +516,22 @@ test_lint_rule_fix_without_fix_function_returns_success() {
 test_lint_gpg_at_top_level_fix_target_absent_moves_into_folder() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() {
-		append_call "make_dir $1"
-		return 0
-	}
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/foo" \
-		"move_file $TEST_ROOT/store/foo.gpg $TEST_ROOT/store/foo/password.gpg")"
+	assert_calls "pass_dispatch mv foo foo/password"
 }
 
 test_lint_gpg_at_top_level_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { return 0; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "fixed: moved 'foo.gpg' to 'foo/password.gpg'"
@@ -527,12 +540,10 @@ test_lint_gpg_at_top_level_fix_target_absent_reports_change() {
 test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
@@ -551,34 +562,37 @@ test_subdomain_to_nested_path_four_labels_nests_each_label_in_reverse() {
 	assert_output "baz.com/bar/foo"
 }
 
+test_subdomain_to_nested_path_two_part_suffix_keeps_suffix_in_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.baz.ac.uk"
+	assert_success
+	assert_output "baz.ac.uk/bar/foo"
+}
+
+test_subdomain_to_nested_path_two_part_suffix_three_labels_nests_under_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.co.uk"
+	assert_success
+	assert_output "bar.co.uk/foo"
+}
+
 test_lint_subdomain_folder_name_fix_target_absent_moves_into_nested_path() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() {
-		append_call "make_dir $1"
-		return 0
-	}
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/baz.com/bar" \
-		"move_file $TEST_ROOT/store/foo.bar.baz.com $TEST_ROOT/store/baz.com/bar/foo")"
+	assert_calls "pass_dispatch mv foo.bar.baz.com baz.com/bar/foo"
 }
 
 test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { return 0; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
 	assert_success
 	assert_output "fixed: moved 'foo.bar.baz.com' to 'baz.com/bar/foo'"
@@ -587,16 +601,34 @@ test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
 test_lint_subdomain_folder_name_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tfoo.bar.com')"
 	assert_success
 	assert_output "error: cannot fix 'foo.bar.com', 'bar.com/foo' already exists"
 	assert_calls ""
+}
+
+test_lint_fix_fix_reads_stdin_still_fixes_every_violation() {
+	lint_rules() { printf '%s\n' foo bar; }
+	lint_foo_violations() { printf '%s\n' first second; }
+	lint_bar_violations() { printf '%s\n' third; }
+	lint_foo_fix() {
+		cat >/dev/null
+		printf 'lint_foo_fix %s\n' "$1"
+	}
+	lint_bar_fix() { printf 'lint_bar_fix %s\n' "$1"; }
+	register_stub lint_rules
+	register_stub lint_foo_violations
+	register_stub lint_bar_violations
+	register_stub lint_foo_fix
+	register_stub lint_bar_fix
+	run_with_output lint_fix
+	assert_output "lint_foo_fix first
+lint_foo_fix second
+lint_bar_fix third"
 }
 
 test_lint_fix_routes_violations_to_fix_function() {
@@ -636,6 +668,37 @@ test_web_entries_lists_entries_under_web_address_folders_only() {
 	TEST_OUTPUT="$(web_entries | sort)"
 	assert_output "foo.com/bar/baz
 foo.com/qux"
+}
+
+test_web_entries_lists_owned_host_entries_except_port_names() {
+	stub_store_in_tmpdir owned
+	mkdir -p "$STUB_STORE_DIR/owned/foo/:22"
+	touch "$STUB_STORE_DIR/owned/qux.gpg" "$STUB_STORE_DIR/owned/foo/bar.gpg" \
+		"$STUB_STORE_DIR/owned/foo/:22/baz.gpg" "$STUB_STORE_DIR/owned/foo/:80.gpg"
+	TEST_OUTPUT="$(web_entries | sort)"
+	assert_output "owned/foo/:22/baz
+owned/foo/bar"
+}
+
+test_host_folders_pattern_joins_folders_as_alternatives() {
+	host_folders() { printf '%s\n' owned qux; }
+	register_stub host_folders
+	run_with_output host_folders_pattern
+	assert_success
+	assert_output "owned|qux"
+}
+
+test_path_without_host_folder_and_ports_any_host_folder_strips_prefix() {
+	host_folders() { printf '%s\n' owned qux; }
+	register_stub host_folders
+	run_with_output path_without_host_folder_and_ports qux/foo/bar
+	assert_output "foo/bar"
+}
+
+test_path_without_host_folder_and_ports_strips_owned_prefix_and_ports() {
+	run_with_output path_without_host_folder_and_ports owned/foo.com/:22/bar
+	assert_success
+	assert_output "foo.com/bar"
 }
 
 test_looks_like_id_unrecognised_name_returns_success() {
@@ -805,6 +868,13 @@ test_lint_redundant_address_violations_emit_records_for_repeats_only() {
 	assert_output "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 }
 
+test_lint_redundant_address_violations_owned_entry_ignores_owned_and_port() {
+	web_entries() { printf '%s\n' owned/foo.com/:22/bar.foo.com owned/baz/:22/qux; }
+	register_stub web_entries
+	run_with_output lint_redundant_address_violations
+	assert_output "$(printf 'bar.foo.com\towned/foo.com/:22/bar.foo.com')"
+}
+
 test_lint_redundant_address_message_formats_record() {
 	run_with_output lint_redundant_address_message "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
@@ -820,22 +890,34 @@ test_lint_redundant_address_remediation_reports_overall_advice() {
 test_lint_redundant_address_fix_target_absent_renames_entry() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
-	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+	assert_calls "pass_dispatch mv foo.com/bar.foo.com foo.com/bar"
+}
+
+test_lint_redundant_address_fix_owned_entry_renames_within_port_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub pass_dispatch
+	run lint_redundant_address_fix "$(printf 'bar.foo.com\towned/foo.com/:22/bar.foo.com')"
+	assert_success
+	assert_calls "pass_dispatch mv owned/foo.com/:22/bar.foo.com owned/foo.com/:22/bar"
 }
 
 test_lint_redundant_address_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
 	assert_success
 	assert_output "fixed: moved 'foo.com/foo.com' to 'foo.com/user'"
@@ -844,10 +926,10 @@ test_lint_redundant_address_fix_target_absent_reports_change() {
 test_lint_redundant_address_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
 	assert_success
 	assert_output "error: cannot fix 'foo.com/foo.com', 'foo.com/user' already exists"

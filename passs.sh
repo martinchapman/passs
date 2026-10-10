@@ -156,7 +156,7 @@ lint_rule_report() {
 lint_fix() {
 	lint_rules | while IFS= read -r rule; do
 		lint_rule_violations "$rule" | while IFS= read -r violation; do
-			lint_rule_fix "$rule" "$violation"
+			lint_rule_fix "$rule" "$violation" </dev/null
 		done
 	done
 }
@@ -445,8 +445,7 @@ lint_gpg_at_top_level_fix() {
 		echo "error: cannot fix '$path', '$folder/password.gpg' already exists"
 		return
 	}
-	make_dir "$store_dir/$folder" &&
-		move_file "$store_dir/$path" "$target" &&
+	pass_dispatch mv "$folder" "$folder/password" >/dev/null &&
 		echo "fixed: moved '$path' to '$folder/password.gpg'"
 }
 
@@ -455,7 +454,10 @@ lint_gpg_at_top_level_fix() {
 ###############################################################################
 
 lint_subdomain_folder_name_violations() {
-	top_level_dirs | while read -r dir; do
+	{
+		top_level_dirs
+		host_dirs
+	} | while read -r dir; do
 		basename="$(path_basename "$dir")"
 		relative_path="$(path_relative_to_store "$dir")"
 		looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && print_lint_violation "$basename" "$relative_path"
@@ -469,14 +471,12 @@ lint_subdomain_folder_name_message() {
 }
 
 lint_subdomain_folder_name_remediation() {
-	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+	echo "Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 subdomain_to_nested_path() {
-	tld="${1##*.}"
-	without_tld="${1%.*}"
-	registrable="${without_tld##*.}.$tld"
-	subdomain_labels="${without_tld%.*}"
+	registrable="$(echo "$1" | sed -E 's/.*\.([^.]+\.[^.]{1,3}\.[a-zA-Z]{2})$/\1/; t; s/.*\.([^.]+\.[^.]+)$/\1/')"
+	subdomain_labels="${1%."$registrable"}"
 	nested="$registrable"
 	while [ -n "$subdomain_labels" ]; do
 		label="${subdomain_labels##*.}"
@@ -497,8 +497,7 @@ lint_subdomain_folder_name_fix() {
 		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
 	}
-	make_dir "$(parent_dir "$target")" &&
-		move_file "$store_dir/$path" "$target" &&
+	pass_dispatch mv "$path" "$target_relative" >/dev/null &&
 		echo "fixed: moved '$path' to '$target_relative'"
 }
 
@@ -514,11 +513,23 @@ generic_account_words() {
 		user username vpn
 }
 
+host_folders() { printf '%s\n' owned; }
+host_folders_pattern() { host_folders | paste -sd '|' -; }
+
+host_dirs() {
+	top_level_dirs | while read -r dir; do
+		host_folders | grep -qxF "$(path_basename "$dir")" &&
+			find "$dir" -mindepth 1 -maxdepth 1 -type d
+	done
+}
+
 web_entries() {
 	store_dir="$(password_store_dir)"
 	find "$store_dir" -path "$store_dir/.git" -prune -o -path "$(vault_dir)" -prune -o -name '*.gpg' -type f -print |
-		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E '^[^/]*\.[^/]*/'
+		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E "^([^/]*\\.[^/]*|($(host_folders_pattern))/[^/]+)/" | grep -v '/:[^/]*$'
 }
+
+path_without_host_folder_and_ports() { printf '%s\n' "$1" | sed -E "s#^($(host_folders_pattern))/##; s#/:[^/]*##g"; }
 
 looks_like_id() {
 	case "$1" in
@@ -595,7 +606,7 @@ redundant_address_fixed_name() {
 
 lint_redundant_address_violations() {
 	web_entries | while read -r relative_path; do
-		has_redundant_address "$relative_path" &&
+		has_redundant_address "$(path_without_host_folder_and_ports "$relative_path")" &&
 			print_lint_violation "${relative_path##*/}" "$relative_path"
 	done
 }
@@ -613,12 +624,12 @@ lint_redundant_address_remediation() {
 lint_redundant_address_fix() {
 	path="$(get_lint_violation_field "$1" 2)"
 	store_dir="$(password_store_dir)"
-	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$path")"
+	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$(path_without_host_folder_and_ports "$path")")"
 	path_exists "$store_dir/$target_relative.gpg" && {
 		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
 	}
-	move_file "$store_dir/$path.gpg" "$store_dir/$target_relative.gpg" &&
+	pass_dispatch mv "$path" "$target_relative" >/dev/null &&
 		echo "fixed: moved '$path' to '$target_relative'"
 }
 
@@ -630,8 +641,9 @@ lint_non_address_folder_violations() {
 	top_level_dirs | while read -r dir; do
 		basename="$(path_basename "$dir")"
 		case "$basename" in
-		.* | *.* | local | encrypt | owned | tokens | codes | devices | "$(vault_name)") ;;
-		*) print_lint_violation "$basename" "$(path_relative_to_store "$dir")" ;;
+		.* | *.* | local | encrypt | tokens | codes | devices | "$(vault_name)") ;;
+		*) host_folders | grep -qxF "$basename" ||
+			print_lint_violation "$basename" "$(path_relative_to_store "$dir")" ;;
 		esac
 	done
 }
