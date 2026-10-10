@@ -1,8 +1,17 @@
+## [0.1.10] - 2026-10-10
+
+### 🚀 Features
+
+- *(lint)* Top-level folders (#35)
 ## [0.1.9] - 2026-10-09
 
 ### 🚀 Features
 
 - Add secret id handling (#32)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.9 (#34)
 ## [0.1.8] - 2026-10-09
 
 ### 🚀 Features
