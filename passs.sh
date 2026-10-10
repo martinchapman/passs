@@ -110,7 +110,8 @@ lint_rules() {
 		subdomain_folder_name \
 		gpg_at_top_level \
 		redundant_address \
-		leaked_id
+		leaked_id \
+		non_address_folder
 }
 
 lint_rule_supports() {
@@ -619,6 +620,30 @@ lint_redundant_address_fix() {
 	}
 	move_file "$store_dir/$path.gpg" "$store_dir/$target_relative.gpg" &&
 		echo "fixed: moved '$path' to '$target_relative'"
+}
+
+###############################################################################
+# Lint rule: non_address_folder
+###############################################################################
+
+lint_non_address_folder_violations() {
+	top_level_dirs | while read -r dir; do
+		basename="$(path_basename "$dir")"
+		case "$basename" in
+		.* | *.* | local | encrypt | owned | tokens | codes | devices | "$(vault_name)") ;;
+		*) print_lint_violation "$basename" "$(path_relative_to_store "$dir")" ;;
+		esac
+	done
+}
+
+lint_non_address_folder_message() {
+	name="$(get_lint_violation_field "$1" 1)"
+	path="$(get_lint_violation_field "$1" 2)"
+	echo "error: folder name '$name' isn't a web address at $path"
+}
+
+lint_non_address_folder_remediation() {
+	echo "Top-level folders should be web addresses, for example foo -> foo.com, apart from local, encrypt, owned, tokens, codes and devices."
 }
 
 ###############################################################################

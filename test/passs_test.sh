@@ -368,7 +368,8 @@ test_lint_rules_lists_registered_rule_ids() {
 	assert_output "subdomain_folder_name
 gpg_at_top_level
 redundant_address
-leaked_id"
+leaked_id
+non_address_folder"
 }
 
 test_lint_rule_report_reports_rule_advice() {
@@ -851,6 +852,41 @@ test_lint_redundant_address_fix_target_exists_refuses_to_overwrite() {
 	assert_success
 	assert_output "error: cannot fix 'foo.com/foo.com', 'foo.com/user' already exists"
 	assert_calls ""
+}
+
+test_lint_non_address_folder_violations_emit_records_for_non_addresses_only() {
+	top_level_dirs() {
+		printf '%s\n' \
+			"$HOME/.password-store/foo" \
+			"$HOME/.password-store/foo bar" \
+			"$HOME/.password-store/foo.com" \
+			"$HOME/.password-store/192.168.0.1" \
+			"$HOME/.password-store/.git" \
+			"$HOME/.password-store/vault" \
+			"$HOME/.password-store/vault/baz" \
+			"$HOME/.password-store/local" \
+			"$HOME/.password-store/encrypt" \
+			"$HOME/.password-store/owned" \
+			"$HOME/.password-store/tokens" \
+			"$HOME/.password-store/codes" \
+			"$HOME/.password-store/devices"
+	}
+	register_stub top_level_dirs
+	run_with_output lint_non_address_folder_violations
+	assert_output "$(printf '%s\t%s\n%s\t%s\n%s\t%s' \
+		foo foo "foo bar" "foo bar" baz vault/baz)"
+}
+
+test_lint_non_address_folder_message_formats_record() {
+	run_with_output lint_non_address_folder_message "$(printf 'foo\tvault/foo')"
+	assert_success
+	assert_output "error: folder name 'foo' isn't a web address at vault/foo"
+}
+
+test_lint_non_address_folder_remediation_reports_overall_advice() {
+	run_with_output lint_non_address_folder_remediation
+	assert_success
+	assert_output "Top-level folders should be web addresses, for example foo -> foo.com, apart from local, encrypt, owned, tokens, codes and devices."
 }
 
 test_passs_main_version_flag_prints_version() {
