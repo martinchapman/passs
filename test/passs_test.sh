@@ -458,16 +458,13 @@ test_lint_subdomain_folder_host_folder_emits_record() {
 test_lint_subdomain_folder_name_fix_host_folder_moves_within_host_folder() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.ac.uk\towned/foo.bar.ac.uk')"
 	assert_success
-	assert_calls "make_dir $TEST_ROOT/store/owned/bar.ac.uk
-move_file $TEST_ROOT/store/owned/foo.bar.ac.uk $TEST_ROOT/store/owned/bar.ac.uk/foo"
+	assert_calls "pass_dispatch mv owned/foo.bar.ac.uk owned/bar.ac.uk/foo"
 }
 
 test_lint_subdomain_folder_vault_folder_emits_record() {
@@ -489,33 +486,25 @@ test_lint_gpg_at_top_level_message_vault_file_shows_path() {
 test_lint_gpg_at_top_level_fix_vault_file_moves_within_vault() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tvault/foo.gpg')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/vault/foo" \
-		"move_file $TEST_ROOT/store/vault/foo.gpg $TEST_ROOT/store/vault/foo/password.gpg")"
+	assert_calls "pass_dispatch mv vault/foo vault/foo/password"
 }
 
 test_lint_subdomain_folder_name_fix_vault_folder_nests_within_vault() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tvault/foo.bar.com')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/vault/bar.com" \
-		"move_file $TEST_ROOT/store/vault/foo.bar.com $TEST_ROOT/store/vault/bar.com/foo")"
+	assert_calls "pass_dispatch mv vault/foo.bar.com vault/bar.com/foo"
 }
 
 test_lint_rule_fix_without_fix_function_returns_success() {
@@ -527,31 +516,22 @@ test_lint_rule_fix_without_fix_function_returns_success() {
 test_lint_gpg_at_top_level_fix_target_absent_moves_into_folder() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() {
-		append_call "make_dir $1"
-		return 0
-	}
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/foo" \
-		"move_file $TEST_ROOT/store/foo.gpg $TEST_ROOT/store/foo/password.gpg")"
+	assert_calls "pass_dispatch mv foo foo/password"
 }
 
 test_lint_gpg_at_top_level_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { return 0; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "fixed: moved 'foo.gpg' to 'foo/password.gpg'"
@@ -560,12 +540,10 @@ test_lint_gpg_at_top_level_fix_target_absent_reports_change() {
 test_lint_gpg_at_top_level_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_gpg_at_top_level_fix "$(printf 'foo.gpg\tfoo.gpg')"
 	assert_success
 	assert_output "error: cannot fix 'foo.gpg', 'foo/password.gpg' already exists"
@@ -599,31 +577,22 @@ test_subdomain_to_nested_path_two_part_suffix_three_labels_nests_under_registrab
 test_lint_subdomain_folder_name_fix_target_absent_moves_into_nested_path() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() {
-		append_call "make_dir $1"
-		return 0
-	}
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
 	assert_success
-	assert_calls "$(printf '%s\n%s' \
-		"make_dir $TEST_ROOT/store/baz.com/bar" \
-		"move_file $TEST_ROOT/store/foo.bar.baz.com $TEST_ROOT/store/baz.com/bar/foo")"
+	assert_calls "pass_dispatch mv foo.bar.baz.com baz.com/bar/foo"
 }
 
 test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	make_dir() { return 0; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.baz.com\tfoo.bar.baz.com')"
 	assert_success
 	assert_output "fixed: moved 'foo.bar.baz.com' to 'baz.com/bar/foo'"
@@ -632,16 +601,34 @@ test_lint_subdomain_folder_name_fix_target_absent_reports_change() {
 test_lint_subdomain_folder_name_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	make_dir() { append_call "make_dir $1"; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub make_dir
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_subdomain_folder_name_fix "$(printf 'foo.bar.com\tfoo.bar.com')"
 	assert_success
 	assert_output "error: cannot fix 'foo.bar.com', 'bar.com/foo' already exists"
 	assert_calls ""
+}
+
+test_lint_fix_fix_reads_stdin_still_fixes_every_violation() {
+	lint_rules() { printf '%s\n' foo bar; }
+	lint_foo_violations() { printf '%s\n' first second; }
+	lint_bar_violations() { printf '%s\n' third; }
+	lint_foo_fix() {
+		cat >/dev/null
+		printf 'lint_foo_fix %s\n' "$1"
+	}
+	lint_bar_fix() { printf 'lint_bar_fix %s\n' "$1"; }
+	register_stub lint_rules
+	register_stub lint_foo_violations
+	register_stub lint_bar_violations
+	register_stub lint_foo_fix
+	register_stub lint_bar_fix
+	run_with_output lint_fix
+	assert_output "lint_foo_fix first
+lint_foo_fix second
+lint_bar_fix third"
 }
 
 test_lint_fix_routes_violations_to_fix_function() {
@@ -903,34 +890,34 @@ test_lint_redundant_address_remediation_reports_overall_advice() {
 test_lint_redundant_address_fix_target_absent_renames_entry() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
-	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+	assert_calls "pass_dispatch mv foo.com/bar.foo.com foo.com/bar"
 }
 
 test_lint_redundant_address_fix_owned_entry_renames_within_port_folder() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run lint_redundant_address_fix "$(printf 'bar.foo.com\towned/foo.com/:22/bar.foo.com')"
 	assert_success
-	assert_calls "move_file $TEST_ROOT/store/owned/foo.com/:22/bar.foo.com.gpg $TEST_ROOT/store/owned/foo.com/:22/bar.gpg"
+	assert_calls "pass_dispatch mv owned/foo.com/:22/bar.foo.com owned/foo.com/:22/bar"
 }
 
 test_lint_redundant_address_fix_target_absent_reports_change() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
-	move_file() { return 0; }
+	pass_dispatch() { return 0; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
 	assert_success
 	assert_output "fixed: moved 'foo.com/foo.com' to 'foo.com/user'"
@@ -939,10 +926,10 @@ test_lint_redundant_address_fix_target_absent_reports_change() {
 test_lint_redundant_address_fix_target_exists_refuses_to_overwrite() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 0; }
-	move_file() { append_call "move_file $1 $2"; }
+	pass_dispatch() { append_call "pass_dispatch $*"; }
 	register_stub password_store_dir
 	register_stub path_exists
-	register_stub move_file
+	register_stub pass_dispatch
 	run_with_output lint_redundant_address_fix "$(printf 'foo.com\tfoo.com/foo.com')"
 	assert_success
 	assert_output "error: cannot fix 'foo.com/foo.com', 'foo.com/user' already exists"

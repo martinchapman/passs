@@ -445,8 +445,7 @@ lint_gpg_at_top_level_fix() {
 		echo "error: cannot fix '$path', '$folder/password.gpg' already exists"
 		return
 	}
-	make_dir "$store_dir/$folder" &&
-		move_file "$store_dir/$path" "$target" &&
+	pass_dispatch mv "$folder" "$folder/password" >/dev/null &&
 		echo "fixed: moved '$path' to '$folder/password.gpg'"
 }
 
@@ -498,8 +497,7 @@ lint_subdomain_folder_name_fix() {
 		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
 	}
-	make_dir "$(parent_dir "$target")" &&
-		move_file "$store_dir/$path" "$target" &&
+	pass_dispatch mv "$path" "$target_relative" >/dev/null &&
 		echo "fixed: moved '$path' to '$target_relative'"
 }
 
@@ -631,7 +629,7 @@ lint_redundant_address_fix() {
 		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
 	}
-	move_file "$store_dir/$path.gpg" "$store_dir/$target_relative.gpg" &&
+	pass_dispatch mv "$path" "$target_relative" >/dev/null &&
 		echo "fixed: moved '$path' to '$target_relative'"
 }
 
