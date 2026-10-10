@@ -455,7 +455,10 @@ lint_gpg_at_top_level_fix() {
 ###############################################################################
 
 lint_subdomain_folder_name_violations() {
-	top_level_dirs | while read -r dir; do
+	{
+		top_level_dirs
+		host_dirs
+	} | while read -r dir; do
 		basename="$(path_basename "$dir")"
 		relative_path="$(path_relative_to_store "$dir")"
 		looks_like_subdomain "$basename" && ! looks_like_ip_address "$basename" && print_lint_violation "$basename" "$relative_path"
@@ -469,7 +472,7 @@ lint_subdomain_folder_name_message() {
 }
 
 lint_subdomain_folder_name_remediation() {
-	echo "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+	echo "Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 subdomain_to_nested_path() {
@@ -514,6 +517,13 @@ generic_account_words() {
 
 host_folders() { printf '%s\n' owned; }
 host_folders_pattern() { host_folders | paste -sd '|' -; }
+
+host_dirs() {
+	top_level_dirs | while read -r dir; do
+		host_folders | grep -qxF "$(path_basename "$dir")" &&
+			find "$dir" -mindepth 1 -maxdepth 1 -type d
+	done
+}
 
 web_entries() {
 	store_dir="$(password_store_dir)"

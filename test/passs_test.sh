@@ -294,7 +294,7 @@ test_lint_subdomain_folder_found_reports_error_and_remediation() {
 	run_with_output lint
 	assert_output "error: folder name 'foo.bar.baz.com' appears to contain subdomain at foo.bar.baz.com
 error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_subdomain_folder_violations_emit_records() {
@@ -317,7 +317,7 @@ test_lint_subdomain_folder_message_formats_record() {
 test_lint_subdomain_folder_remediation_reports_overall_advice() {
 	run_with_output lint_subdomain_folder_name_remediation
 	assert_success
-	assert_output "Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+	assert_output "Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_lint_no_violations_found_produces_no_output() {
@@ -378,7 +378,7 @@ test_lint_rule_report_reports_rule_advice() {
 	run_with_output lint_rule_report subdomain_folder_name
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_passs_script_lint_defines_rules_before_running_main() {
@@ -406,7 +406,7 @@ test_passs_script_lint_defines_rules_before_running_main() {
 	run_with_output run_passs_lint_from_source
 	assert_success
 	assert_output "error: folder name 'foo.bar.com' appears to contain subdomain at foo.bar.com
-Top-level folders should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
+Top-level folders, and host folders inside folders like owned, should be registrable domains. Put subdomains underneath the parent domain instead, for example foo.bar.com -> bar.com/foo."
 }
 
 test_top_level_gpg_files_vault_present_searches_store_and_vault() {
@@ -435,6 +435,39 @@ test_lint_roots_vault_absent_lists_store_only() {
 	rmdir "$STUB_STORE_DIR/vault"
 	run_with_output lint_roots
 	assert_output "$STUB_STORE_DIR"
+}
+
+test_host_dirs_lists_children_of_host_folders_only() {
+	stub_store_in_tmpdir hosts
+	mkdir -p "$STUB_STORE_DIR/owned/foo.bar.com/:22" "$STUB_STORE_DIR/foo.com/bar"
+	top_level_dirs() { printf '%s\n' "$STUB_STORE_DIR/owned" "$STUB_STORE_DIR/foo.com"; }
+	register_stub top_level_dirs
+	run_with_output host_dirs
+	assert_output "$STUB_STORE_DIR/owned/foo.bar.com"
+}
+
+test_lint_subdomain_folder_host_folder_emits_record() {
+	top_level_dirs() { printf '%s\n' "$HOME/.password-store/owned"; }
+	host_dirs() { printf '%s\n' "$HOME/.password-store/owned/foo.bar.com" "$HOME/.password-store/owned/bar.com"; }
+	register_stub top_level_dirs
+	register_stub host_dirs
+	run_with_output lint_subdomain_folder_name_violations
+	assert_output "$(printf 'foo.bar.com\towned/foo.bar.com')"
+}
+
+test_lint_subdomain_folder_name_fix_host_folder_moves_within_host_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	make_dir() { append_call "make_dir $1"; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub make_dir
+	register_stub move_file
+	run lint_subdomain_folder_name_fix "$(printf 'foo.bar.ac.uk\towned/foo.bar.ac.uk')"
+	assert_success
+	assert_calls "make_dir $TEST_ROOT/store/owned/bar.ac.uk
+move_file $TEST_ROOT/store/owned/foo.bar.ac.uk $TEST_ROOT/store/owned/bar.ac.uk/foo"
 }
 
 test_lint_subdomain_folder_vault_folder_emits_record() {
