@@ -1,8 +1,17 @@
+## [0.1.11] - 2026-10-10
+
+### 🚜 Refactor
+
+- *(lint)* Use browserpass friendly id field (#37)
 ## [0.1.10] - 2026-10-10
 
 ### 🚀 Features
 
 - *(lint)* Top-level folders (#35)
+
+### ⚙️ Miscellaneous Tasks
+
+- V0.1.10 (#36)
 ## [0.1.9] - 2026-10-09
 
 ### 🚀 Features
