@@ -473,10 +473,8 @@ lint_subdomain_folder_name_remediation() {
 }
 
 subdomain_to_nested_path() {
-	tld="${1##*.}"
-	without_tld="${1%.*}"
-	registrable="${without_tld##*.}.$tld"
-	subdomain_labels="${without_tld%.*}"
+	registrable="$(echo "$1" | sed -E 's/.*\.([^.]+\.[^.]{1,3}\.[a-zA-Z]{2})$/\1/; t; s/.*\.([^.]+\.[^.]+)$/\1/')"
+	subdomain_labels="${1%."$registrable"}"
 	nested="$registrable"
 	while [ -n "$subdomain_labels" ]; do
 		label="${subdomain_labels##*.}"

@@ -551,6 +551,18 @@ test_subdomain_to_nested_path_four_labels_nests_each_label_in_reverse() {
 	assert_output "baz.com/bar/foo"
 }
 
+test_subdomain_to_nested_path_two_part_suffix_keeps_suffix_in_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.baz.ac.uk"
+	assert_success
+	assert_output "baz.ac.uk/bar/foo"
+}
+
+test_subdomain_to_nested_path_two_part_suffix_three_labels_nests_under_registrable() {
+	run_with_output subdomain_to_nested_path "foo.bar.co.uk"
+	assert_success
+	assert_output "bar.co.uk/foo"
+}
+
 test_lint_subdomain_folder_name_fix_target_absent_moves_into_nested_path() {
 	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
 	path_exists() { return 1; }
