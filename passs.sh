@@ -514,11 +514,16 @@ generic_account_words() {
 		user username vpn
 }
 
+host_folders() { printf '%s\n' owned; }
+host_folders_pattern() { host_folders | paste -sd '|' -; }
+
 web_entries() {
 	store_dir="$(password_store_dir)"
 	find "$store_dir" -path "$store_dir/.git" -prune -o -path "$(vault_dir)" -prune -o -name '*.gpg' -type f -print |
-		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E '^[^/]*\.[^/]*/'
+		sed "s|^$store_dir/||; s|\.gpg$||" | grep -E "^([^/]*\\.[^/]*|($(host_folders_pattern))/[^/]+)/" | grep -v '/:[^/]*$'
 }
+
+path_without_host_folder_and_ports() { printf '%s\n' "$1" | sed -E "s#^($(host_folders_pattern))/##; s#/:[^/]*##g"; }
 
 looks_like_id() {
 	case "$1" in
@@ -595,7 +600,7 @@ redundant_address_fixed_name() {
 
 lint_redundant_address_violations() {
 	web_entries | while read -r relative_path; do
-		has_redundant_address "$relative_path" &&
+		has_redundant_address "$(path_without_host_folder_and_ports "$relative_path")" &&
 			print_lint_violation "${relative_path##*/}" "$relative_path"
 	done
 }
@@ -613,7 +618,7 @@ lint_redundant_address_remediation() {
 lint_redundant_address_fix() {
 	path="$(get_lint_violation_field "$1" 2)"
 	store_dir="$(password_store_dir)"
-	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$path")"
+	target_relative="$(parent_dir "$path")/$(redundant_address_fixed_name "$(path_without_host_folder_and_ports "$path")")"
 	path_exists "$store_dir/$target_relative.gpg" && {
 		echo "error: cannot fix '$path', '$target_relative' already exists"
 		return
@@ -630,8 +635,9 @@ lint_non_address_folder_violations() {
 	top_level_dirs | while read -r dir; do
 		basename="$(path_basename "$dir")"
 		case "$basename" in
-		.* | *.* | local | encrypt | owned | tokens | codes | devices | "$(vault_name)") ;;
-		*) print_lint_violation "$basename" "$(path_relative_to_store "$dir")" ;;
+		.* | *.* | local | encrypt | tokens | codes | devices | "$(vault_name)") ;;
+		*) host_folders | grep -qxF "$basename" ||
+			print_lint_violation "$basename" "$(path_relative_to_store "$dir")" ;;
 		esac
 	done
 }

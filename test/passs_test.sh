@@ -638,6 +638,37 @@ test_web_entries_lists_entries_under_web_address_folders_only() {
 foo.com/qux"
 }
 
+test_web_entries_lists_owned_host_entries_except_port_names() {
+	stub_store_in_tmpdir owned
+	mkdir -p "$STUB_STORE_DIR/owned/foo/:22"
+	touch "$STUB_STORE_DIR/owned/qux.gpg" "$STUB_STORE_DIR/owned/foo/bar.gpg" \
+		"$STUB_STORE_DIR/owned/foo/:22/baz.gpg" "$STUB_STORE_DIR/owned/foo/:80.gpg"
+	TEST_OUTPUT="$(web_entries | sort)"
+	assert_output "owned/foo/:22/baz
+owned/foo/bar"
+}
+
+test_host_folders_pattern_joins_folders_as_alternatives() {
+	host_folders() { printf '%s\n' owned qux; }
+	register_stub host_folders
+	run_with_output host_folders_pattern
+	assert_success
+	assert_output "owned|qux"
+}
+
+test_path_without_host_folder_and_ports_any_host_folder_strips_prefix() {
+	host_folders() { printf '%s\n' owned qux; }
+	register_stub host_folders
+	run_with_output path_without_host_folder_and_ports qux/foo/bar
+	assert_output "foo/bar"
+}
+
+test_path_without_host_folder_and_ports_strips_owned_prefix_and_ports() {
+	run_with_output path_without_host_folder_and_ports owned/foo.com/:22/bar
+	assert_success
+	assert_output "foo.com/bar"
+}
+
 test_looks_like_id_unrecognised_name_returns_success() {
 	run looks_like_id x7Fq2 "Foo Bar"
 	assert_success
@@ -805,6 +836,13 @@ test_lint_redundant_address_violations_emit_records_for_repeats_only() {
 	assert_output "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 }
 
+test_lint_redundant_address_violations_owned_entry_ignores_owned_and_port() {
+	web_entries() { printf '%s\n' owned/foo.com/:22/bar.foo.com owned/baz/:22/qux; }
+	register_stub web_entries
+	run_with_output lint_redundant_address_violations
+	assert_output "$(printf 'bar.foo.com\towned/foo.com/:22/bar.foo.com')"
+}
+
 test_lint_redundant_address_message_formats_record() {
 	run_with_output lint_redundant_address_message "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
@@ -827,6 +865,18 @@ test_lint_redundant_address_fix_target_absent_renames_entry() {
 	run lint_redundant_address_fix "$(printf 'bar.foo.com\tfoo.com/bar.foo.com')"
 	assert_success
 	assert_calls "move_file $TEST_ROOT/store/foo.com/bar.foo.com.gpg $TEST_ROOT/store/foo.com/bar.gpg"
+}
+
+test_lint_redundant_address_fix_owned_entry_renames_within_port_folder() {
+	password_store_dir() { printf '%s\n' "$TEST_ROOT/store"; }
+	path_exists() { return 1; }
+	move_file() { append_call "move_file $1 $2"; }
+	register_stub password_store_dir
+	register_stub path_exists
+	register_stub move_file
+	run lint_redundant_address_fix "$(printf 'bar.foo.com\towned/foo.com/:22/bar.foo.com')"
+	assert_success
+	assert_calls "move_file $TEST_ROOT/store/owned/foo.com/:22/bar.foo.com.gpg $TEST_ROOT/store/owned/foo.com/:22/bar.gpg"
 }
 
 test_lint_redundant_address_fix_target_absent_reports_change() {
