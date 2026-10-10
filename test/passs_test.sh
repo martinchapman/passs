@@ -691,7 +691,7 @@ test_lint_leaked_id_message_formats_record() {
 test_lint_leaked_id_remediation_reports_overall_advice() {
 	run_with_output lint_leaked_id_remediation
 	assert_success
-	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
+	assert_output "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'login: bar' after the password, or into the vault."
 }
 
 test_lint_leaked_id_fix_write_succeeds_writes_new_entry_then_removes_old() {

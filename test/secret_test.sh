@@ -48,7 +48,7 @@ test_write_secret_entry_password_only_appends_id_line() {
 	assert_success
 	assertEquals "insert -m -f foo.com/hidden-credentials-1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
 	assertEquals "bar
-id: foo-id" "$(cat "$SHUNIT_TMPDIR/pass-input")"
+login: foo-id" "$(cat "$SHUNIT_TMPDIR/pass-input")"
 }
 
 test_write_secret_entry_extra_lines_inserts_id_after_password() {
@@ -59,7 +59,7 @@ qux"
 	assert_success
 	assertEquals "insert -m -f foo.com/hidden-credentials-1" "$(cat "$SHUNIT_TMPDIR/pass-args")"
 	assertEquals "bar
-id: foo-id
+login: foo-id
 url: baz.com
 qux" "$(cat "$SHUNIT_TMPDIR/pass-input")"
 }
