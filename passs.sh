@@ -319,7 +319,7 @@ Commands:
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
   generate|insert --secret pass-folder/id [pass args]
-                                    Run pass generate or insert for pass-folder/hidden-credentials-N, then add 'id: <id>' after the password
+                                    Run pass generate or insert for pass-folder/hidden-credentials-N, then add 'login: <id>' after the password
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -546,7 +546,7 @@ lint_leaked_id_message() {
 }
 
 lint_leaked_id_remediation() {
-	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'id: bar' after the password, or into the vault."
+	echo "Entry names aren't encrypted, so they shouldn't contain ids. Move the id into the entry, for example foo.com/bar -> foo.com/hidden-credentials-1 with 'login: bar' after the password, or into the vault."
 }
 
 lint_leaked_id_fix() {
@@ -661,7 +661,7 @@ next_secret_entry() {
 write_secret_entry() {
 	content="$(pass show "$1")" || return
 	password="$(printf '%s\n' "$content" | head -n 1)"
-	printf '%s\nid: %s%s\n' "$password" "$3" "${content#"$password"}" |
+	printf '%s\nlogin: %s%s\n' "$password" "$3" "${content#"$password"}" |
 		pass_dispatch insert -m -f "$2" >/dev/null
 }
 
