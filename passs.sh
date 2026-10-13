@@ -94,7 +94,7 @@ top_level_dirs() {
 	done
 }
 
-path_basename() { basename "$1"; }
+path_basename() { basename "$@"; }
 path_relative_to_store() { echo "$1" | sed "s|$(password_store_dir)/||"; }
 looks_like_subdomain() {
 	echo "$1" | grep -qE '^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+' || return 1
@@ -319,7 +319,7 @@ Commands:
   description get pass-name         Print an entry's description
   lint [--fix]                      Report store structure problems, and fix them with --fix
   generate|insert --secret pass-folder/id [pass args]
-                                    Run pass generate or insert for pass-folder/hidden-credentials-N, then add 'login: <id>' after the password
+                                    Run pass generate or insert for the pass-folder/hidden-credentials-N holding the id (or a new one), then add 'login: <id>' after the password
   git push|pull [args]              Run pass git, encrypting and decrypting the vault
   version, --version                Print the version
   help, -h, --help                  Show this help
@@ -389,12 +389,8 @@ passs_main() {
 		esac
 		;;
 	generate | insert)
-		case "$2" in
-		--secret)
-			pass_command="$1"
-			shift 2
-			add_secret_entry "$pass_command" "$@"
-			;;
+		case " $* " in
+		*" --secret "*) add_secret_entry "$@" ;;
 		*) pass_dispatch "$@" ;;
 		esac
 		;;
@@ -677,19 +673,41 @@ write_secret_entry() {
 		pass_dispatch insert -m -f "$2" >/dev/null
 }
 
+secret_entry_has_id() { pass show "$1" 2>/dev/null | grep -qxF "login: $2"; }
+
+existing_secret_entry() {
+	for file in "$(password_store_dir)/$1"/hidden-credentials-*.gpg; do
+		entry="$1/$(path_basename "$file" .gpg)"
+		secret_entry_has_id "$entry" "$2" && echo "$entry" && return
+	done
+	return 1
+}
+
 add_secret_entry() {
-	case "$2" in
+	pass_command="$1"
+	shift
+	secret_path=
+	for arg; do
+		shift
+		if [ "$secret_path" = --secret ]; then
+			secret_path="$arg"
+		elif [ "$arg" = --secret ]; then
+			secret_path="$arg"
+		else
+			set -- "$@" "$arg"
+		fi
+	done
+	case "$secret_path" in
 	[!-/]*/*[!/]) ;;
 	*)
-		echo "Usage: passs $1 --secret pass-folder/id [pass $1 args]"
+		echo "Usage: passs $pass_command --secret pass-folder/id [pass $pass_command args]"
 		return 1
 		;;
 	esac
-	pass_command="$1"
-	name="$(next_secret_entry "${2%/*}")"
-	secret_id="${2##*/}"
-	shift 2
-	pass_dispatch "$pass_command" "$name" "$@" && write_secret_entry "$name" "$name" "$secret_id"
+	secret_id="${secret_path##*/}"
+	name="$(existing_secret_entry "${secret_path%/*}" "$secret_id" || next_secret_entry "${secret_path%/*}")"
+	pass_dispatch "$pass_command" "$name" "$@" &&
+		{ secret_entry_has_id "$name" "$secret_id" || write_secret_entry "$name" "$name" "$secret_id"; }
 }
 
 [ "${PASSS_TESTING:-0}" = "1" ] || passs_main "$@"
