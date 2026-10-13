@@ -1,8 +1,14 @@
+## [0.1.13] - 2026-10-13
+
+### 🐛 Bug Fixes
+
+- Secret flag position and regeneration (#41)
 ## [0.1.12] - 2026-10-10
 
 ### ⚙️ Miscellaneous Tasks
 
 - *(lint)* Owned entries (#39)
+- V0.1.12 (#40)
 ## [0.1.11] - 2026-10-10
 
 ### 🚜 Refactor
